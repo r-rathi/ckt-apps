@@ -1,0 +1,60 @@
+#!/usr/bin/env python
+
+#-------------------------------------------------------------------------------
+import os
+import sys
+
+bin_dir = os.path.dirname(os.path.abspath(__file__))
+pkg_dir = os.path.abspath(os.path.join(bin_dir, ".."))
+sys.path.append(pkg_dir)
+
+#-------------------------------------------------------------------------------
+import argparse
+import collections
+
+import cktapps
+from cktapps import spice, apps
+
+#-------------------------------------------------------------------------------
+def main(args=None):
+    parser = argparse.ArgumentParser(description="Report net fanout")
+
+    parser.add_argument('spice_files', metavar='file', nargs='+',
+                        type=argparse.FileType('r'), help='spice netlist file(s)')
+    parser.add_argument('--cell', required=True,
+                        help='name of the cell to be analyzed')
+    parser.add_argument('--lib',
+                        help='file with model (e.g. nch, pch) defintions')
+
+    args = parser.parse_args()
+
+    #---------------------------------------------------------------------------
+   
+    ckt = cktapps.Ckt("")
+
+    for spice_file in args.spice_files:
+        spice.read_spice(ckt, spice_file)
+
+    ckt.resolve_refs()
+
+    cellname = args.cell
+
+    cell = ckt.find_cell(cellname)
+    #print cell
+
+    spice.write_spice(cell)
+
+    print "-"*80
+    cell.flatten_cell()
+    #print cell
+    spice.write_spice(cell)
+
+
+    print "-"*80
+
+    apps.report_net(cell)
+
+#-------------------------------------------------------------------------------
+if __name__ == "__main__":
+    main()
+

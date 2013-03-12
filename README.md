@@ -1,4 +1,2 @@
-ckt-apps
-========
-
-Circuit Design and Analysis utilities.
+Ckt Apps: Circuit Design and Analysis utilities
+===============================================
