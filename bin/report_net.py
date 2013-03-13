@@ -13,7 +13,8 @@ import argparse
 import collections
 
 import cktapps
-from cktapps import spice, apps
+from cktapps import apps
+from cktapps.formats import spice
 
 #-------------------------------------------------------------------------------
 def main(args=None):
