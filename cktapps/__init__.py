@@ -1,3 +1,3 @@
 """ Ckt Apps """
 
-from cktapps.db import Ckt
+from cktapps.core import Ckt
