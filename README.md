@@ -1,11 +1,11 @@
 Ckt-apps: Circuit Design and Analysis Applications
 ==================================================
 
-**Ckt-apps** is a collection of circuit design and anaysis applications as well as the package (library) itself on which the applications are based.
+**Ckt-apps** is a suite of circuit design and anaysis (EDA) applications as well as the package (library) itself on which the applications are based.
 
 Applications
 ------------
-The end-user applications are in the *bin* directory. Currently, following following applications are provided:
+The end-user applications are in the *bin* directory. Currently, following applications are provided:
 - `bin/report_net.py` - Report nets in the design with summary of wire, driver, and load caps and fanouts.
 
 The cktapps package
