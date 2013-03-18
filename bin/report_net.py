@@ -27,18 +27,18 @@ def main(args=None):
     parser.add_argument('--lib',
                         help='file with model (e.g. nch, pch) defintions')
 
-    args = parser.parse_args()
+    arg_ns = parser.parse_args(args)
 
     #---------------------------------------------------------------------------
    
     ckt = cktapps.Ckt("")
 
-    for spice_file in args.spice_files:
+    for spice_file in arg_ns.spice_files:
         spice.read_spice(ckt, spice_file)
 
     ckt.resolve_refs()
 
-    cellname = args.cell
+    cellname = arg_ns.cell
 
     cell = ckt.find_cell(cellname)
     #print cell
