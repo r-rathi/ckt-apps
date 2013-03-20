@@ -117,6 +117,7 @@ class Cell(object):
         self.nets = collections.OrderedDict()
         self.instances = collections.OrderedDict()
         self.cells = collections.OrderedDict()
+        self.macromodels = collections.OrderedDict()
         #self.pins = []
         self.scope_path = []
 
@@ -287,7 +288,9 @@ class Cell(object):
 
         #cache = {}
         #count = 0
-        for inst in self.find_instance():
+        hier_insts = [inst for inst in self.find_instance() if inst.ishier]
+        for inst in hier_insts:
+        #for inst in self.find_instance():
             #count += 1
             #if count % 10 == 0:
             #print("Resolving refs... inst: %s/%s" % (self.full_name(),

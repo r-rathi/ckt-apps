@@ -22,16 +22,22 @@ def main(args=None):
 
     parser.add_argument('spice_files', metavar='file', nargs='+',
                         type=argparse.FileType('r'), help='spice netlist file(s)')
+
+    parser.add_argument('--lib', nargs='+', type=argparse.FileType('r'),
+                        help='lib file(s) with model (e.g. nch, pch) defintions')
+
     parser.add_argument('--cell', required=True,
                         help='name of the cell to be analyzed')
-    parser.add_argument('--lib',
-                        help='file with model (e.g. nch, pch) defintions')
 
     arg_ns = parser.parse_args(args)
 
     #---------------------------------------------------------------------------
    
     ckt = cktapps.Ckt("")
+
+    if arg_ns.lib:
+        for lib_file in arg_ns.lib:
+            spice.read_spice(ckt, lib_file)
 
     for spice_file in arg_ns.spice_files:
         spice.read_spice(ckt, spice_file)

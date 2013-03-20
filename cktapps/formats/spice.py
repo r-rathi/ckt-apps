@@ -45,6 +45,7 @@ def read_spice(ckt, file, spice_reader=None):
     if spice_reader is None:
         spice_reader = SpiceReader(ckt)
     spice_reader.read(file)
+    return spice_reader
     
 #def write_spice_line(filename, max_line_size=None):
     #file = open(filename, "w")
@@ -130,7 +131,6 @@ class SpiceWriter(object):
 
 #-------------------------------------------------------------------------------
 class SpiceReader(object):
-    mos_models = ['nch', 'pch']
     def __init__(self, ckt):
         self.ckt = ckt
         self._cell_stack = [ckt]
@@ -168,16 +168,54 @@ class SpiceReader(object):
                     self._add_port(portname)
                     self._add_net(portname)
 
-            if line[0].lower() == ".ends":
+            elif line[0].lower() == ".ends":
                 try:
                     self._pop_cell_scope()
                 except IndexError:
                     raise SyntaxError("keyword '.ends' unexpected here: %s, %s\n%s" %
                                            (filename, line_num, orig_line))
 
+            elif line[0].lower() == ".macromodel":
+                params = collections.OrderedDict()
+                non_params = []
+                for item in line:
+                    if re.search("=", item):
+                        lhs, rhs = item.split("=")
+                        params[lhs] = rhs
+                    else:
+                        non_params.append(item)
+
+                name, type = non_params[1:]
+                macromodel = self._add_macromodel(name, type) #, params=params)
+                self._push_cell_scope(macromodel)
+
+            elif line[0].lower() == ".endmacromodel":
+                try:
+                    self._pop_cell_scope()
+                except IndexError:
+                    raise SyntaxError("keyword '.endmacromodel' unexpected here: %s, %s\n%s" %
+                                           (filename, line_num, orig_line))
+
             elif line[0][0].lower() == "m" or \
                  line[0][0].lower() == "x" and \
-                 len(line) > 5 and  line[5].lower() in self.mos_models:
+                 len(line) > 5 and  line[5].lower() in self.ckt.macromodels:
+            #elif line[0][0].lower() == "m" or \
+            #     line[0][0].lower() == "x":
+
+                #print(line)
+                #if len(line) > 5:
+                #    mm = line[5].lower()
+                #    print("|%s|%s|" % (mm, mm in self.ckt.macromodels))
+                #    print(">", self.ckt.macromodels)
+                #    for mx in self.ckt.macromodels:
+                #        print("|%s|%s|" % (mx, self.ckt.macromodels[mx]))
+
+                #    if line[5].lower() not in self.ckt.macromodels:
+                #        continue
+                #else:
+                #    continue
+                #print(line)
+
                 mname, s, g, d, b, model = line[0:6]
                 if mname[0].lower() == "x":
                     mname = mname[1:]
@@ -245,6 +283,10 @@ class SpiceReader(object):
         prev_cell = self._current_cell
         self._current_cell = self._cell_stack.pop()
         return prev_cell
+
+    def _add_macromodel(self, name, type): #*args, **kwargs):
+        self.ckt.macromodels[name] = type
+        return name
 
     def _add_cell(self, *args, **kwargs):
         parent_cell = self._current_cell

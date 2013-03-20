@@ -14,7 +14,7 @@ def report_net(cell):
                 net_info[pin.net.name]['drivers'].append(pin.instance)
             elif pin.port.name == 'g':
                 net_info[pin.net.name]['loads'].append(pin.instance)
-            elif pin.instance.cell.name == 'c':
+            elif pin.instance.cellname == 'c':
                 net_info[pin.net.name]['caps'].append(pin.instance)
 
     for netname, info in net_info.items():
