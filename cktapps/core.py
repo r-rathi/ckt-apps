@@ -260,7 +260,7 @@ class Cell(object):
     def flatten_cell(self, max_depth=1000):
         for depth in range(max_depth):
             hier_insts = [inst for inst in self.find_instance() if inst.ishier]
-            #print "depth:", depth, [i.name for i in hier_insts]
+            #print("depth:", depth, [i.name for i in hier_insts])
             if len(hier_insts) == 0:
                 return
             for inst in hier_insts:
