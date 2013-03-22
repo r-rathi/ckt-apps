@@ -17,7 +17,7 @@ class SyntaxError(Exception): pass
 def read_spice_line(file):
     """
     Reads a Spice file line-by-line, unwrapping the line continuations (+) in
-    the process. Every invocation returns a new line.
+    the process. Every invocation returns a tuple (line, filename, lineno)
     """
     lineno = 0;
     for line in file:
@@ -66,12 +66,12 @@ class SpiceReader(object):
         for (line, filename, lineno) in read_spice_line(file):
             orig_line = line
 
-            nL = 1000
-            if lineno % nL == 0:
+            dl = 1000
+            if lineno % dl == 0:
                 t1 = time.time()
                 dt = (t1 - t0)*1e6 # usec
                 t0 = t1
-                print("%s usec/line: %s : %s" % (dt/nL, lineno, line))
+                print("%s usec/line: %s : %s" % (dt/dl, lineno, line))
 
             if (RE_BLANK_LINE.match(line) or
                 RE_COMMENT_LINE.match(line)):
@@ -213,12 +213,12 @@ class SpiceReader(object):
         for (line, filename, lineno) in read_spice_line(file):
             orig_line = line
 
-            nL = 1000
-            if lineno % nL == 0:
+            dl = 1000
+            if lineno % dl == 0:
                 t1 = time.time()
                 dt = (t1 - t0)*1e6 # usec
                 t0 = t1
-                print("%s usec/line: %s : %s" % (dt/nL, lineno, line))
+                print("%s usec/line: %s : %s" % (dt/dl, lineno, line))
 
             if (RE_BLANK_LINE.match(line) or
                 RE_COMMENT_LINE.match(line)):
