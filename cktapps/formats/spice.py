@@ -55,6 +55,21 @@ def write_spice(cell, file=None):
     spice_writer.emit_cell()
 
 #-------------------------------------------------------------------------------
+def split_spice_line(line):
+
+    # 'kw = val' => 'kw=val'
+    line = re.sub(r'\s*=\s*', '=', line)
+
+    # remove all spaces
+    def rm_space(matchobj):
+        return re.sub(r'\s+', '', matchobj.group(0))
+
+    # removel all spaces from within "..." (spice parameter expressions)
+    line = re.sub(r'"([^"]*)"', rm_space, line)
+
+    return line.split()
+
+#-------------------------------------------------------------------------------
 class SpiceReader(object):
     def __init__(self, ckt):
         self.ckt = ckt
