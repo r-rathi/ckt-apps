@@ -90,14 +90,14 @@ class TestSpiceSplitLine:
     def test_kwargs(self):
         line = 'a1 a2  k1=v1 k2= v2 k3 =v3 k4 = v4'
         tokens = spice.split_spice_line(line)
-        assert tokens == ['a1', 'a2', 'k1', '=', 'v1', 'k2', '=', 'v2',
-                          'k3', '=', 'v3', 'k4', '=', 'v4']
+        assert tokens == ['a1', 'a2', 'k1=v1', 'k2=v2',
+                          'k3=v3', 'k4=v4']
 
     def test_kwargs_exp(self):
         line = 'a1 a2  k1=" 1* 2" k2 = " (1 + v2) " k3 = 3.0p k4= v4 '
         tokens = spice.split_spice_line(line)
-        assert tokens == ['a1', 'a2', 'k1', '=', '"1*2"', 'k2', '=', '"(1+v2)"',
-                          'k3', '=', '3.0p', 'k4', '=', 'v4']
+        assert tokens == ['a1', 'a2', 'k1="1*2"', 'k2="(1+v2)"',
+                          'k3=3.0p', 'k4=v4']
 
     def test_blank_line(self):
         line = '  '
@@ -142,24 +142,26 @@ class TestSpiceSplitLine:
 class TestSpiceParseLine:
     #@classmethod
     #def setup_class(cls):
-        #pass
+    #    pass
     #@classmethod
     #def teardown_class(cls):
-        #pass
+    #    pass
 
     def test_element_args(self):
         tokens = 'm a1 a2 a3'.split()
         parsed = spice.parse_spice_line(tokens)
         assert parsed == {'type'   : ['element', 'm'],
                           'args'   : ['m', 'a1', 'a2', 'a3'],
-                          'kwargs' : OrderedDict()
+                          'kwargs' : OrderedDict(),
+                          'comment': ''
                          }
 
         tokens = 'mxy a1 a2 a3'.split()
         parsed = spice.parse_spice_line(tokens)
         assert parsed == {'type'   : ['element', 'm'],
                           'args'   : ['mxy', 'a1', 'a2', 'a3'],
-                          'kwargs' : OrderedDict()
+                          'kwargs' : OrderedDict(),
+                          'comment': ''
                          }
 
     def test_control_args(self):
@@ -167,55 +169,100 @@ class TestSpiceParseLine:
         parsed = spice.parse_spice_line(tokens)
         assert parsed == {'type'   : ['control', 'subckt'],
                           'args'   : ['.subckt', 'a1', 'a2', 'a3'],
-                          'kwargs' : OrderedDict()
+                          'kwargs' : OrderedDict(),
+                          'comment': ''
                          }
 
     def test_element_kwargs1(self):
-        tokens = 'mxy a1 a2 kw1 = v1'.split()
+        tokens = 'mxy a1 a2 kw1=v1'.split()
         parsed = spice.parse_spice_line(tokens)
         assert parsed == {'type'   : ['element', 'm'],
                           'args'   : ['mxy', 'a1', 'a2'],
-                          'kwargs' : OrderedDict(kw1='v1')
+                          'kwargs' : OrderedDict(kw1='v1'),
+                          'comment': ''
                          }
 
     def test_element_kwargs2(self):
-        tokens = 'mxy a1 a2 kw1 = v1 kw2 = v2'.split()
+        tokens = 'mxy a1 a2 kw1=v1 kw2=v2'.split()
         parsed = spice.parse_spice_line(tokens)
         assert parsed == {'type'   : ['element', 'm'],
                           'args'   : ['mxy', 'a1', 'a2'],
-                          'kwargs' : OrderedDict(kw1='v1', kw2='v2')
+                          'kwargs' : OrderedDict(kw1='v1', kw2='v2'),
+                          'comment': ''
                          }
 
     def test_control_kwargs2(self):
-        tokens = '.subckt a1 a2 kw1 = v1 kw2 = v2'.split()
+        tokens = '.subckt a1 a2 kw1=v1 kw2=v2'.split()
         parsed = spice.parse_spice_line(tokens)
         assert parsed == {'type'   : ['control', 'subckt'],
                           'args'   : ['.subckt', 'a1', 'a2'],
-                          'kwargs' : OrderedDict(kw1='v1', kw2='v2')
+                          'kwargs' : OrderedDict(kw1='v1', kw2='v2'),
+                          'comment': ''
                          }
 
     def test_control_kwargs_only(self):
-        tokens = '.subckt kw1 = v1 kw2 = v2'.split()
+        tokens = '.subckt kw1=v1 kw2=v2'.split()
         parsed = spice.parse_spice_line(tokens)
         assert parsed == {'type'   : ['control', 'subckt'],
                           'args'   : ['.subckt'],
-                          'kwargs' : OrderedDict(kw1='v1', kw2='v2')
+                          'kwargs' : OrderedDict(kw1='v1', kw2='v2'),
+                          'comment': ''
                          }
 
     def test_control_kwargs_bad1(self):
-        tokens = '.subckt kw1 = v1 a1 kw2 = v2'.split()
+        tokens = '.subckt kw1=v1 a1 kw2=v2'.split()
         with pytest.raises(spice.SyntaxError) as e:
             parsed = spice.parse_spice_line(tokens)
-        assert e.value.message == "unexpected token 'kw2' at pos '6'"
+        #assert e.value.message == "unexpected token 'kw2' at pos '6'"
+        assert e.value.message == "unexpected token 'a1' at pos '2'"
 
     def test_control_kwargs_bad2(self):
-        tokens = '.subckt kw1 = v1 kw2 ='.split()
+        tokens = '.subckt kw1=v1 kw2='.split()
         with pytest.raises(spice.SyntaxError) as e:
             parsed = spice.parse_spice_line(tokens)
-        assert e.value.message == "unexpected token '=' at pos '6'"
+        #assert e.value.message == "unexpected token '=' at pos '6'"
+        assert e.value.message == "missing parameter value: kw2=?"
 
     def test_control_kwargs_bad3(self):
-        tokens = '.subckt kw1 = v1 kw2'.split()
+        tokens = '.subckt kw1=v1 kw2'.split()
         with pytest.raises(spice.SyntaxError) as e:
             parsed = spice.parse_spice_line(tokens)
-        assert e.value.message == "unexpected token 'kw2' at pos '5'"
+        #assert e.value.message == "unexpected token 'kw2' at pos '5'"
+        assert e.value.message == "unexpected token 'kw2' at pos '2'"
+
+    def test_comment_line_skip_true(self):
+        tokens = '* mxy a1 a2 kw1=v1'.split()
+        parsed = spice.parse_spice_line(tokens)
+        assert parsed == {'type'   : ['comment', '*'],
+                          'args'   : [],
+                          'kwargs' : {},
+                          'comment': '* mxy a1 a2 kw1=v1'
+                         }
+
+    def test_comment_line_skip_false(self):
+        tokens = '* mxy a1 a2 kw1=v1'.split()
+        parsed = spice.parse_spice_line(tokens, skipcomments=False)
+        assert parsed == {'type'   : ['comment', '*'],
+                          'args'   : [],
+                          'kwargs' : {},
+                          'comment': '* mxy a1 a2 kw1=v1'
+                         }
+
+    def test_trailing_comment_skip_true(self):
+        tokens = 'mxy a1 a2 kw1=v1 $ c1 c2'.split()
+        parsed = spice.parse_spice_line(tokens)
+        assert parsed == {'type'   : ['element', 'm'],
+                          'args'   : ['mxy', 'a1', 'a2'],
+                          'kwargs' : OrderedDict(kw1='v1'),
+                          'comment': '$ c1 c2'
+                         }
+
+    def test_trailing_comment_skip_false(self):
+        tokens = 'mxy a1 a2 kw1=v1 $ c1 c2'.split()
+        parsed = spice.parse_spice_line(tokens, skipcomments=False)
+        assert parsed == {'type'   : ['element', 'm'],
+                          'args'   : ['mxy', 'a1', 'a2'],
+                          'kwargs' : OrderedDict(kw1='v1'),
+                          'comment': '$ c1 c2'
+                         }
+

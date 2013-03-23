@@ -44,8 +44,7 @@ def read_spice_line(file):
 def read_spice(ckt, file, spice_reader=None):
     if spice_reader is None:
         spice_reader = SpiceReader(ckt)
-    #spice_reader.read(file)
-    spice_reader.read_new(file)
+    spice_reader.read(file)
     return spice_reader
     
 #def write_spice_line(filename, max_line_size=None):
@@ -62,8 +61,8 @@ def split_spice_line(line):
     line = re.sub(r'\*', ' * ', line)
     line = re.sub(r'\$', ' $ ', line)
 
-    # add spaced around '=' ('kw=val' => 'kw = val')
-    line = re.sub(r'=', ' = ', line)
+    # remove spaces around '='
+    line = re.sub(r'\s*=\s*', '=', line)
 
     # remove all spaces from within "..." (spice parameter expressions)
     def rm_space(matchobj):
@@ -73,79 +72,37 @@ def split_spice_line(line):
 
     return line.split()
 
-def parse_spice_line(tokens):
-    if tokens[0][0] == '.':
+def parse_spice_line(tokens, skipcomments=True):
+    if tokens[0] == '*':
+        type = ['comment', tokens[0]]
+    elif tokens[0][0] == '.':
         type = ['control', tokens[0][1:]]
     else:
         type = ['element', tokens[0][0]]
 
     args = []
     kwargs = collections.OrderedDict()
+    comment = ''
 
-    state = 'EXPECT_ARG_OR_KEY'
-
+    args_done = False
     for pos, tok in enumerate(tokens):
-        print(pos, tok, state, args, kwargs, end=" -> ")
+        if tok in ['*', '$']:
+            comment = " ".join(tokens[pos:])
+            break
+        elif '=' in tok:
+            k, v = tok.split('=')
+            if not v:
+                raise SyntaxError("missing parameter value: %s=?" % k)
 
-        if state == 'EXPECT_ARG_OR_KEY':
-
-            if tok == '=':
+            kwargs[k] = v
+            args_done = True
+        else:
+            if args_done:
                 raise SyntaxError("unexpected token '%s' at pos '%s'"
-                                  % (tok, pos+1))
-            else:
-                if pos > 0:
-                    args.append(tokens[pos-1])
-                if pos == len(tokens)-1:
-                    args.append(tok)
-                state = 'EXPECT_ARG_OR_KEY_OR_EQ'
+                                  % (tok, pos))
+            args.append(tok)
 
-        elif state == 'EXPECT_ARG_OR_KEY_OR_EQ':
-
-            if tokens[pos] == '=':
-                if pos == len(tokens)-1:
-                    raise SyntaxError("unexpected token '%s' at pos '%s'"
-                                      % (tok, pos+1))
-                state = 'EXPECT_VAL'
-            else:
-                args.append(tokens[pos-1])
-                if pos == len(tokens)-1:
-                    args.append(tok)
-                state = 'EXPECT_ARG_OR_KEY_OR_EQ'
-
-        elif state == 'EXPECT_VAL':
-
-            if tokens[pos] == '=':
-                raise SyntaxError("unexpected token '%s' at pos '%s'"
-                                  % (tok, pos+1))
-            else:
-                kwargs[tokens[pos-2]] = tok
-                state = 'EXPECT_KEY'
-
-        elif state == 'EXPECT_KEY':
-
-            if tokens[pos] == '=':
-                raise SyntaxError("unexpected token '%s' at pos '%s'"
-                                  % (tok, pos+1))
-            else:
-                if pos == len(tokens)-1:
-                    raise SyntaxError("unexpected token '%s' at pos '%s'"
-                                      % (tok, pos+1))
-                state = 'EXPECT_EQ'
-
-        elif state == 'EXPECT_EQ':
-
-            if tokens[pos] == '=':
-                if pos == len(tokens)-1:
-                    raise SyntaxError("unexpected token '%s' at pos '%s'"
-                                      % (tok, pos+1))
-                state = 'EXPECT_VAL'
-            else:
-                raise SyntaxError("unexpected token '%s' at pos '%s'"
-                                  % (tok, pos+1))
-
-        print(state, args, kwargs)
-
-    return dict(type=type, args=args, kwargs=kwargs)
+    return dict(type=type, args=args, kwargs=kwargs, comment=comment)
 
 #-------------------------------------------------------------------------------
 class SpiceReader(object):
@@ -155,153 +112,6 @@ class SpiceReader(object):
         self._current_cell = ckt
 
     def read(self, file):
-        t0 = time.time()
-        for (line, filename, lineno) in read_spice_line(file):
-            orig_line = line
-
-            dl = 1000
-            if lineno % dl == 0:
-                t1 = time.time()
-                dt = (t1 - t0)*1e6 # usec
-                t0 = t1
-                print("%s usec/line: %s : %s" % (dt/dl, lineno, line))
-
-            if (RE_BLANK_LINE.match(line) or
-                RE_COMMENT_LINE.match(line)):
-                continue
-
-            line = RE_TRAILING_COMMENT.sub("", line)
-
-            line = line.split()
-
-            if line[0].lower() == ".subckt":
-                params = collections.OrderedDict()
-                non_params = []
-                for item in line:
-                    if re.search("=", item):
-                        lhs, rhs = item.split("=")
-                        params[lhs] = rhs
-                    else:
-                        non_params.append(item)
-
-                cellname = non_params[1]
-                portnames = non_params[2:]
-
-                cell = self._add_cell(cellname, params=params)
-                self._push_cell_scope(cell)
-
-                for portname in portnames:
-                    self._add_port(portname)
-                    self._add_net(portname)
-
-            elif line[0].lower() == ".ends":
-                try:
-                    self._pop_cell_scope()
-                except IndexError:
-                    raise SyntaxError("keyword '.ends' unexpected here: %s, %s\n%s" %
-                                           (filename, lineno, orig_line))
-
-            elif line[0].lower() == ".macromodel":
-                params = collections.OrderedDict()
-                non_params = []
-                for item in line:
-                    if re.search("=", item):
-                        lhs, rhs = item.split("=")
-                        params[lhs] = rhs
-                    else:
-                        non_params.append(item)
-
-                name, type = non_params[1:]
-                macromodel = self._add_macromodel(name, type) #, params=params)
-                self._push_cell_scope(macromodel)
-
-            elif line[0].lower() == ".endmacromodel":
-                try:
-                    self._pop_cell_scope()
-                except IndexError:
-                    raise SyntaxError("keyword '.endmacromodel' unexpected here: %s, %s\n%s" %
-                                           (filename, lineno, orig_line))
-
-            elif line[0][0].lower() == "m" or \
-                 line[0][0].lower() == "x" and \
-                 len(line) > 5 and  line[5].lower() in self.ckt.macromodels:
-            #elif line[0][0].lower() == "m" or \
-            #     line[0][0].lower() == "x":
-
-                #print(line)
-                #if len(line) > 5:
-                #    mm = line[5].lower()
-                #    print("|%s|%s|" % (mm, mm in self.ckt.macromodels))
-                #    print(">", self.ckt.macromodels)
-                #    for mx in self.ckt.macromodels:
-                #        print("|%s|%s|" % (mx, self.ckt.macromodels[mx]))
-
-                #    if line[5].lower() not in self.ckt.macromodels:
-                #        continue
-                #else:
-                #    continue
-                #print(line)
-
-                mname, s, g, d, b, model = line[0:6]
-                if mname[0].lower() == "x":
-                    mname = mname[1:]
-
-                #params = line[6:]
-                params = collections.OrderedDict()
-                non_params = []
-                for item in line:
-                    if re.search("=", item):
-                        lhs, rhs = item.split("=")
-                        params[lhs] = rhs
-                    else:
-                        non_params.append(item)
-
-                net_s = self._add_net(s)
-                net_g = self._add_net(g)
-                net_d = self._add_net(d)
-                net_b = self._add_net(b)
-
-                inst = self._add_instance(mname, model, params=params)
-
-                self._add_pin('s', inst, net_s)
-                self._add_pin('g', inst, net_g)
-                self._add_pin('d', inst, net_d)
-                self._add_pin('b', inst, net_b)
-
-            elif line[0][0].lower() == "c":
-                cname, plus, minus, cap = line
-                params = dict(cap=cap)
-
-                net_plus = self._add_net(plus)
-                net_minus = self._add_net(minus)
-
-                inst = self._add_instance(cname, 'c', params=params)
-
-                self._add_pin('plus', inst, net_plus)
-                self._add_pin('minus', inst, net_minus)
-
-            elif line[0][0].lower() == "x":
-                params = collections.OrderedDict()
-                non_params = []
-                for item in line:
-                    if re.search("=", item):
-                        lhs, rhs = item.split("=")
-                        params[lhs] = rhs
-                    else:
-                        non_params.append(item)
-
-                instname = non_params[0][1:]
-                cellname = non_params[-1]
-                netnames = non_params[1:-1]
-
-                inst = self._add_instance(instname, cellname, params=params)
-                inst.ishier = True
-
-                for netname in netnames:
-                    net = self._add_net(netname)
-                    self._add_pin(None, inst, net)
-
-    def read_new(self, file):
         t0 = time.time()
         for (line, filename, lineno) in read_spice_line(file):
             orig_line = line
