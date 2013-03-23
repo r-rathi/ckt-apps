@@ -56,15 +56,19 @@ def write_spice(cell, file=None):
 
 #-------------------------------------------------------------------------------
 def split_spice_line(line):
+    """ Split a spice line to args and kwargs (param=value) """
 
-    # 'kw = val' => 'kw=val'
-    line = re.sub(r'\s*=\s*', '=', line)
+    # add spaces around comment begin chars '*' or '$'
+    line = re.sub(r'\*', ' * ', line)
+    line = re.sub(r'\$', ' $ ', line)
 
-    # remove all spaces
+    # add spaced around '=' ('kw=val' => 'kw = val')
+    line = re.sub(r'=', ' = ', line)
+
+    # remove all spaces from within "..." (spice parameter expressions)
     def rm_space(matchobj):
         return re.sub(r'\s+', '', matchobj.group(0))
 
-    # removel all spaces from within "..." (spice parameter expressions)
     line = re.sub(r'"([^"]*)"', rm_space, line)
 
     return line.split()
