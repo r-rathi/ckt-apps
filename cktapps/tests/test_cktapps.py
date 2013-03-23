@@ -2,6 +2,7 @@
 
 import pytest
 from StringIO import StringIO
+from collections import OrderedDict
 
 from cktapps.formats import spice
 
@@ -83,65 +84,138 @@ class TestSpiceReadLine:
 class TestSpiceSplitLine:
     def test_args(self):
         line = 'a1 a2  a3'
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['a1', 'a2', 'a3']
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['a1', 'a2', 'a3']
 
     def test_kwargs(self):
         line = 'a1 a2  k1=v1 k2= v2 k3 =v3 k4 = v4'
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['a1', 'a2', 'k1', '=', 'v1', 'k2', '=', 'v2',
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['a1', 'a2', 'k1', '=', 'v1', 'k2', '=', 'v2',
                           'k3', '=', 'v3', 'k4', '=', 'v4']
 
     def test_kwargs_exp(self):
         line = 'a1 a2  k1=" 1* 2" k2 = " (1 + v2) " k3 = 3.0p k4= v4 '
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['a1', 'a2', 'k1', '=', '"1*2"', 'k2', '=', '"(1+v2)"',
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['a1', 'a2', 'k1', '=', '"1*2"', 'k2', '=', '"(1+v2)"',
                           'k3', '=', '3.0p', 'k4', '=', 'v4']
 
     def test_blank_line(self):
         line = '  '
-        parsed = spice.split_spice_line(line)
-        assert parsed == []
+        tokens = spice.split_spice_line(line)
+        assert tokens == []
 
     def test_comment_line(self):
         line = '* ab c  '
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['*', 'ab', 'c']
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['*', 'ab', 'c']
 
         line = ' * ab c  '
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['*', 'ab', 'c']
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['*', 'ab', 'c']
 
         line = '*ab c  '
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['*', 'ab', 'c']
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['*', 'ab', 'c']
 
         line = '$ ab c  '
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['$', 'ab', 'c']
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['$', 'ab', 'c']
 
     def test_tailing_comment(self):
         line = 'ab $ c d'
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['ab', '$', 'c', 'd']
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['ab', '$', 'c', 'd']
 
         line = 'ab $c d'
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['ab', '$', 'c', 'd']
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['ab', '$', 'c', 'd']
 
         line = 'ab$ c d'
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['ab', '$', 'c', 'd']
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['ab', '$', 'c', 'd']
 
         line = 'ab$c d'
-        parsed = spice.split_spice_line(line)
-        assert parsed == ['ab', '$', 'c', 'd']
+        tokens = spice.split_spice_line(line)
+        assert tokens == ['ab', '$', 'c', 'd']
 
 
-#class TestParseLine:
+class TestSpiceParseLine:
     #@classmethod
     #def setup_class(cls):
         #pass
     #@classmethod
     #def teardown_class(cls):
         #pass
+
+    def test_element_args(self):
+        tokens = 'm a1 a2 a3'.split()
+        parsed = spice.parse_spice_line(tokens)
+        assert parsed == {'type'   : ['element', 'm'],
+                          'args'   : ['m', 'a1', 'a2', 'a3'],
+                          'kwargs' : OrderedDict()
+                         }
+
+        tokens = 'mxy a1 a2 a3'.split()
+        parsed = spice.parse_spice_line(tokens)
+        assert parsed == {'type'   : ['element', 'm'],
+                          'args'   : ['mxy', 'a1', 'a2', 'a3'],
+                          'kwargs' : OrderedDict()
+                         }
+
+    def test_control_args(self):
+        tokens = '.subckt a1 a2 a3'.split()
+        parsed = spice.parse_spice_line(tokens)
+        assert parsed == {'type'   : ['control', 'subckt'],
+                          'args'   : ['.subckt', 'a1', 'a2', 'a3'],
+                          'kwargs' : OrderedDict()
+                         }
+
+    def test_element_kwargs1(self):
+        tokens = 'mxy a1 a2 kw1 = v1'.split()
+        parsed = spice.parse_spice_line(tokens)
+        assert parsed == {'type'   : ['element', 'm'],
+                          'args'   : ['mxy', 'a1', 'a2'],
+                          'kwargs' : OrderedDict(kw1='v1')
+                         }
+
+    def test_element_kwargs2(self):
+        tokens = 'mxy a1 a2 kw1 = v1 kw2 = v2'.split()
+        parsed = spice.parse_spice_line(tokens)
+        assert parsed == {'type'   : ['element', 'm'],
+                          'args'   : ['mxy', 'a1', 'a2'],
+                          'kwargs' : OrderedDict(kw1='v1', kw2='v2')
+                         }
+
+    def test_control_kwargs2(self):
+        tokens = '.subckt a1 a2 kw1 = v1 kw2 = v2'.split()
+        parsed = spice.parse_spice_line(tokens)
+        assert parsed == {'type'   : ['control', 'subckt'],
+                          'args'   : ['.subckt', 'a1', 'a2'],
+                          'kwargs' : OrderedDict(kw1='v1', kw2='v2')
+                         }
+
+    def test_control_kwargs_only(self):
+        tokens = '.subckt kw1 = v1 kw2 = v2'.split()
+        parsed = spice.parse_spice_line(tokens)
+        assert parsed == {'type'   : ['control', 'subckt'],
+                          'args'   : ['.subckt'],
+                          'kwargs' : OrderedDict(kw1='v1', kw2='v2')
+                         }
+
+    def test_control_kwargs_bad1(self):
+        tokens = '.subckt kw1 = v1 a1 kw2 = v2'.split()
+        with pytest.raises(spice.SyntaxError) as e:
+            parsed = spice.parse_spice_line(tokens)
+        assert e.value.message == "unexpected token 'kw2' at pos '6'"
+
+    def test_control_kwargs_bad2(self):
+        tokens = '.subckt kw1 = v1 kw2 ='.split()
+        with pytest.raises(spice.SyntaxError) as e:
+            parsed = spice.parse_spice_line(tokens)
+        assert e.value.message == "unexpected token '=' at pos '6'"
+
+    def test_control_kwargs_bad3(self):
+        tokens = '.subckt kw1 = v1 kw2'.split()
+        with pytest.raises(spice.SyntaxError) as e:
+            parsed = spice.parse_spice_line(tokens)
+        assert e.value.message == "unexpected token 'kw2' at pos '5'"

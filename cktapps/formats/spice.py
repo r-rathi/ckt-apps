@@ -56,7 +56,7 @@ def write_spice(cell, file=None):
 
 #-------------------------------------------------------------------------------
 def split_spice_line(line):
-    """ Split a spice line to args and kwargs (param=value) """
+    """ Split a spice line into tokens """
 
     # add spaces around comment begin chars '*' or '$'
     line = re.sub(r'\*', ' * ', line)
@@ -72,6 +72,80 @@ def split_spice_line(line):
     line = re.sub(r'"([^"]*)"', rm_space, line)
 
     return line.split()
+
+def parse_spice_line(tokens):
+    if tokens[0][0] == '.':
+        type = ['control', tokens[0][1:]]
+    else:
+        type = ['element', tokens[0][0]]
+
+    args = []
+    kwargs = collections.OrderedDict()
+
+    state = 'EXPECT_ARG_OR_KEY'
+
+    for pos, tok in enumerate(tokens):
+        print(pos, tok, state, args, kwargs, end=" -> ")
+
+        if state == 'EXPECT_ARG_OR_KEY':
+
+            if tok == '=':
+                raise SyntaxError("unexpected token '%s' at pos '%s'"
+                                  % (tok, pos+1))
+            else:
+                if pos > 0:
+                    args.append(tokens[pos-1])
+                if pos == len(tokens)-1:
+                    args.append(tok)
+                state = 'EXPECT_ARG_OR_KEY_OR_EQ'
+
+        elif state == 'EXPECT_ARG_OR_KEY_OR_EQ':
+
+            if tokens[pos] == '=':
+                if pos == len(tokens)-1:
+                    raise SyntaxError("unexpected token '%s' at pos '%s'"
+                                      % (tok, pos+1))
+                state = 'EXPECT_VAL'
+            else:
+                args.append(tokens[pos-1])
+                if pos == len(tokens)-1:
+                    args.append(tok)
+                state = 'EXPECT_ARG_OR_KEY_OR_EQ'
+
+        elif state == 'EXPECT_VAL':
+
+            if tokens[pos] == '=':
+                raise SyntaxError("unexpected token '%s' at pos '%s'"
+                                  % (tok, pos+1))
+            else:
+                kwargs[tokens[pos-2]] = tok
+                state = 'EXPECT_KEY'
+
+        elif state == 'EXPECT_KEY':
+
+            if tokens[pos] == '=':
+                raise SyntaxError("unexpected token '%s' at pos '%s'"
+                                  % (tok, pos+1))
+            else:
+                if pos == len(tokens)-1:
+                    raise SyntaxError("unexpected token '%s' at pos '%s'"
+                                      % (tok, pos+1))
+                state = 'EXPECT_EQ'
+
+        elif state == 'EXPECT_EQ':
+
+            if tokens[pos] == '=':
+                if pos == len(tokens)-1:
+                    raise SyntaxError("unexpected token '%s' at pos '%s'"
+                                      % (tok, pos+1))
+                state = 'EXPECT_VAL'
+            else:
+                raise SyntaxError("unexpected token '%s' at pos '%s'"
+                                  % (tok, pos+1))
+
+        print(state, args, kwargs)
+
+    return dict(type=type, args=args, kwargs=kwargs)
 
 #-------------------------------------------------------------------------------
 class SpiceReader(object):
