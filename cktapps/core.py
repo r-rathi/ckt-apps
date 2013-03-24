@@ -344,7 +344,7 @@ class Cell(object):
 class Ckt(Cell):
     """ Circuit class represents the top-level of the design """
 
-    def __init__(self, name, params=None):
+    def __init__(self, name=None, params=None):
         super(Ckt, self).__init__(name, params)
         self._reader_cache = {}
 

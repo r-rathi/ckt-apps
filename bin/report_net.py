@@ -33,7 +33,7 @@ def main(args=None):
 
     #---------------------------------------------------------------------------
    
-    ckt = cktapps.Ckt("")
+    ckt = cktapps.Ckt()
 
     if arg_ns.lib:
         for lib_file in arg_ns.lib:
