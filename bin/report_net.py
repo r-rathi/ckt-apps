@@ -37,10 +37,10 @@ def main(args=None):
 
     if arg_ns.lib:
         for lib_file in arg_ns.lib:
-            spice.read_spice(ckt, lib_file)
+            ckt.read(lib_file, format='spice')
 
     for spice_file in arg_ns.spice_files:
-        spice.read_spice(ckt, spice_file)
+        ckt.read(spice_file, format='spice')
 
     ckt.resolve_refs()
 

@@ -1,11 +1,21 @@
+""" cktapps core circuit netlist-database classes
+
+The circuit netlist database represents the basic circuit elements and their
+connectivity. The database supports hierarchical designs, and can be queried
+as well as modified through the core API interface.
+"""
+
 #-------------------------------------------------------------------------------
 from __future__ import absolute_import
 from __future__ import print_function
-
 import collections, copy
+
+import importlib # Python 2.7 only?
 
 #-------------------------------------------------------------------------------
 class LinkingError(Exception): pass
+
+class FileFormatError(Exception): pass
 
 #-------------------------------------------------------------------------------
 class Port(object):
@@ -311,6 +321,7 @@ class Cell(object):
             #if count % 10 == 0:
             #print("=> cell:", inst.cell.full_name())
 
+
     def __repr__(self):
         lev = len(self.scope_path)
         indent = " " * 4
@@ -331,4 +342,27 @@ class Cell(object):
         return r
 
 class Ckt(Cell):
-    pass
+    """ Circuit class represents the top-level of the design """
+
+    def __init__(self, name, params=None):
+        super(Ckt, self).__init__(name, params)
+        self._reader_cache = {}
+
+    def read(self, f, format):
+        try:
+            reader = self._reader_cache[format]
+        except KeyError:
+            pass
+
+        try:
+            mod = importlib.import_module("cktapps.formats." + format)
+        except ImportError:
+            raise FileFormatError("unsupported format '%s'" % format)
+
+        try:
+            reader = mod.Reader
+            self._reader_cache[format] = reader
+        except AttributeError:
+            raise FileFormatError("unsupported format '%s'" % format)
+
+        reader(self).read(f)

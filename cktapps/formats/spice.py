@@ -40,12 +40,6 @@ def read_line(f):
     """
     return Reader.read_line(f)
 
-def read_spice(ckt, file, spice_reader=None):
-    if spice_reader is None:
-        spice_reader = Reader(ckt)
-    spice_reader.read(file)
-    return spice_reader
-    
 #def write_spice_line(filename, max_line_size=None):
     #file = open(filename, "w")
 def write_spice(cell, file=None):
