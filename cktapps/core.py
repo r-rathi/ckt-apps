@@ -13,8 +13,8 @@ import collections, copy
 import importlib # Python 2.7 only?
 
 #-------------------------------------------------------------------------------
+class InternalError(Exception): pass
 class LinkingError(Exception): pass
-
 class FileFormatError(Exception): pass
 
 #-------------------------------------------------------------------------------
@@ -341,6 +341,7 @@ class Cell(object):
         r += indent*lev + "}"
         return r
 
+#-------------------------------------------------------------------------------
 class Ckt(Cell):
     """ Circuit class represents the top-level of the design """
 
@@ -349,10 +350,19 @@ class Ckt(Cell):
         self._reader_cache = {}
 
     def read(self, f, format):
+        """ Read file into the Ckt database
+
+        f      -- file or filetype object
+        format -- file format (language), e.g. spice
+        """
+
         try:
             reader = self._reader_cache[format]
         except KeyError:
             pass
+        else:
+            reader(self).read(f)
+            return
 
         try:
             mod = importlib.import_module("cktapps.formats." + format)
@@ -363,6 +373,9 @@ class Ckt(Cell):
             reader = mod.Reader
             self._reader_cache[format] = reader
         except AttributeError:
-            raise FileFormatError("unsupported format '%s'" % format)
+            raise InternalError("attribute 'Reader' missing from plugin '%s'"
+                                % format)
 
         reader(self).read(f)
+
+#-------------------------------------------------------------------------------
