@@ -1,3 +1,19 @@
+"""
+Functions and classes to handle spice format
+
+Classes:
+
+    SpiceReader
+    SpiceWriter
+
+Functions:
+
+    read_spice_line(fileobj) -> list
+    split_spice_line(list) -> list
+    parse_spice_line(list) -> dic
+
+"""
+
 #-------------------------------------------------------------------------------
 from __future__ import absolute_import
 from __future__ import print_function
@@ -12,6 +28,8 @@ RE_TRAILING_COMMENT = re.compile(r"\s*[$].*$")
 
 #-------------------------------------------------------------------------------
 class SyntaxError(Exception): pass
+
+class ParserError(Exception): pass
 
 #-------------------------------------------------------------------------------
 def read_spice_line(file):
@@ -32,7 +50,7 @@ def read_spice_line(file):
                 if (RE_BLANK_LINE.match(line) or
                     RE_COMMENT_LINE.match(line) or
                     RE_TRAILING_COMMENT.search(line)):
-                    raise SyntaxError("invalid line continuation: %s, %s\n%s" %
+                    raise SyntaxError("invalid line continuation: %s, %s\n-> %s" %
                                            (file.name, lineno, next_line))
                 line = line.rstrip() + " " + next_line[1:].lstrip()
                 continue
@@ -73,7 +91,23 @@ def split_spice_line(line):
     return line.split()
 
 def parse_spice_line(tokens, skipcomments=True):
-    if tokens[0] == '*':
+    """
+    Parse spice statement
+
+    Returns:
+        {'type'   : [<major>, <minor>]
+         'args'   : [...]
+         'kwargs' : OrderedDict(...),
+         'comment': '...'
+        }
+
+        Or None
+    """
+    if not tokens:  # skip blank line
+        return None
+
+    if tokens[0] in ['*', '$']:
+        if skipcomments: return None
         type = ['comment', tokens[0]]
     elif tokens[0][0] == '.':
         type = ['control', tokens[0][1:]]
@@ -110,8 +144,30 @@ class SpiceReader(object):
         self.ckt = ckt
         self._cell_stack = [ckt]
         self._current_cell = ckt
+                        
+    def read(self, f):
+        for (stmt, fname, lineno) in read_spice_line(f):
+            try:
+                tokens = split_spice_line(stmt)
+                pstmt = parse_spice_line(tokens)
+                if pstmt is None: continue
+                major, minor = pstmt['type']
+            except SyntaxError, e:
+                raise SyntaxError("%s [%s, %s]\n-> %s" %
+                                  (e.msg, fname, lineno, stmt))
 
-    def read(self, file):
+            # Skip comments for now
+            if major == 'comment': continue
+
+            try:
+                self._process_stmt[major][minor](self, pstmt)
+            except KeyError:
+                raise ParserError(
+                    "unrecognized type '%s/%s' [%s, %s]\n-> %s" %
+                    (major, minor, fname, lineno, stmt))
+
+
+    def read_old(self, file):
         t0 = time.time()
         for (line, filename, lineno) in read_spice_line(file):
             orig_line = line
@@ -149,6 +205,104 @@ class SpiceReader(object):
                 self._parse_x(line)
 
     #---------------------------------------------------------------------------
+    def _process_subckt(self, pstmt):
+        args = pstmt['args']
+        params = pstmt['kwargs']
+
+        cellname = args[1]
+        portnames = args[2:]
+
+        cell = self._add_cell(cellname, params=params)
+        self._push_cell_scope(cell)
+
+        for portname in portnames:
+            self._add_port(portname)
+            self._add_net(portname)
+
+    def _process_ends(self, pstmt):
+        try:
+            self._pop_cell_scope()
+        except IndexError:
+            raise SyntaxError("keyword '.ends' unexpected here: %s, %s\n-> %s" %
+                                   (filename, lineno, orig_line))
+
+    def _process_macromodel(self, pstmt):
+        args = pstmt['args']
+        params = pstmt['kwargs']
+
+        name, type = args[1:]
+        macromodel = self._add_macromodel(name, type) #, params=params)
+        self._push_cell_scope(macromodel)
+
+    def _process_endmacromodel(self, pstmt):
+        try:
+            self._pop_cell_scope()
+        except IndexError:
+            raise SyntaxError(
+                "keyword '.endmacromedel' unexpected here: %s, %s\n-> %s" %
+                (filename, lineno, orig_line))
+
+    def _process_param(self, pstmt):
+        pass
+
+    def _process_r(self, pstmt):
+        pass
+
+    def _process_c(self, pstmt):
+        args = pstmt['args']
+        params = pstmt['kwargs']
+
+        cname, plus, minus, cap = args
+        params.update(dict(cap=cap))
+
+        net_plus = self._add_net(plus)
+        net_minus = self._add_net(minus)
+
+        inst = self._add_instance(cname, 'c', params=params)
+
+        self._add_pin('plus', inst, net_plus)
+        self._add_pin('minus', inst, net_minus)
+
+    def _process_m(self, pstmt):
+        args = pstmt['args']
+        params = pstmt['kwargs']
+
+        mname, s, g, d, b, model = args[0:6]
+        if mname[0].lower() == "x":
+            mname = mname[1:]
+
+        net_s = self._add_net(s)
+        net_g = self._add_net(g)
+        net_d = self._add_net(d)
+        net_b = self._add_net(b)
+
+        inst = self._add_instance(mname, model, params=params)
+
+        self._add_pin('s', inst, net_s)
+        self._add_pin('g', inst, net_g)
+        self._add_pin('d', inst, net_d)
+        self._add_pin('b', inst, net_b)
+
+    def _process_x(self, pstmt):
+        args = pstmt['args']
+        params = pstmt['kwargs']
+
+        instname = args[0][1:]
+        cellname = args[-1]
+        netnames = args[1:-1]
+
+
+        if cellname in self.ckt.macromodels:
+            self._process_m(pstmt)
+            return
+
+        inst = self._add_instance(instname, cellname, params=params)
+        inst.ishier = True
+
+        for netname in netnames:
+            net = self._add_net(netname)
+            self._add_pin(None, inst, net)
+
     def _parse_kw_line(self, line):
             if line[0].lower() == ".subckt":
                 params = collections.OrderedDict()
@@ -258,6 +412,19 @@ class SpiceReader(object):
             for netname in netnames:
                 net = self._add_net(netname)
                 self._add_pin(None, inst, net)
+
+    _process_stmt = {'control' : {'subckt'        : _process_subckt,
+                                  'ends'          : _process_ends,
+                                  'macromodel'    : _process_macromodel,
+                                  'endmacromodel' : _process_endmacromodel,
+                                  'param'         : _process_param,
+                                 },
+                     'element' : {'r' : _process_r,
+                                  'c' : _process_c,
+                                  'm' : _process_m,
+                                  'x' : _process_x
+                                 }
+                    }
 
     #---------------------------------------------------------------------------
     def _push_cell_scope(self, cell):

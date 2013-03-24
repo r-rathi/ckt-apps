@@ -54,7 +54,7 @@ class TestSpiceReadLine:
         with pytest.raises(spice.SyntaxError) as e:
             lines = [line for line in spice.read_spice_line(f)]
 
-        assert e.value.message == "invalid line continuation: <string>, 4\n+ c2"
+        assert e.value.message == "invalid line continuation: <string>, 4\n-> + c2"
 
     def test_unwrap_leading_comment(self):
         f = StringIO("a b\n"
@@ -67,7 +67,7 @@ class TestSpiceReadLine:
         with pytest.raises(spice.SyntaxError) as e:
             lines = [line for line in spice.read_spice_line(f)]
 
-        assert e.value.message == "invalid line continuation: <string>, 4\n+ c2"
+        assert e.value.message == "invalid line continuation: <string>, 4\n-> + c2"
 
     def test_unwrap_trailing_comment(self):
         f = StringIO("a b\n"
@@ -79,7 +79,7 @@ class TestSpiceReadLine:
         with pytest.raises(spice.SyntaxError) as e:
             lines = [line for line in spice.read_spice_line(f)]
 
-        assert e.value.message == "invalid line continuation: <string>, 3\n+ c2"
+        assert e.value.message == "invalid line continuation: <string>, 3\n-> + c2"
 
 class TestSpiceSplitLine:
     def test_args(self):
@@ -233,11 +233,12 @@ class TestSpiceParseLine:
     def test_comment_line_skip_true(self):
         tokens = '* mxy a1 a2 kw1=v1'.split()
         parsed = spice.parse_spice_line(tokens)
-        assert parsed == {'type'   : ['comment', '*'],
-                          'args'   : [],
-                          'kwargs' : {},
-                          'comment': '* mxy a1 a2 kw1=v1'
-                         }
+        assert parsed is None
+        #assert parsed == {'type'   : ['comment', '*'],
+        #                  'args'   : [],
+        #                  'kwargs' : {},
+        #                  'comment': '* mxy a1 a2 kw1=v1'
+        #                 }
 
     def test_comment_line_skip_false(self):
         tokens = '* mxy a1 a2 kw1=v1'.split()
