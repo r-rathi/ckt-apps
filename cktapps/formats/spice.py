@@ -32,36 +32,17 @@ class SyntaxError(Exception): pass
 class ParserError(Exception): pass
 
 #-------------------------------------------------------------------------------
-def read_spice_line(file):
-    """
-    Reads a Spice file line-by-line, unwrapping the line continuations (+) in
-    the process. Every invocation returns a tuple (line, filename, lineno)
-    """
-    lineno = 0;
-    for line in file:
-        lineno += 1
-        line = line.rstrip('\n')
+def read_line(f):
+    """Reads a Spice file line-by-line, unwrapping the line continuations (+)
+    in the process. Every invocation returns a tuple (line, filename, lineno)
 
-        for next_line in file:
-            lineno += 1
-            next_line = next_line.rstrip('\n')
-
-            if next_line and next_line[0] == '+':
-                if (RE_BLANK_LINE.match(line) or
-                    RE_COMMENT_LINE.match(line) or
-                    RE_TRAILING_COMMENT.search(line)):
-                    raise SyntaxError("invalid line continuation: %s, %s\n-> %s" %
-                                           (file.name, lineno, next_line))
-                line = line.rstrip() + " " + next_line[1:].lstrip()
-                continue
-            else:
-                yield (line, file.name, lineno-1)
-                line = next_line
-        yield (line, file.name, lineno)
+    This is just a module level wrapper over the Reader.read_line() method.
+    """
+    return Reader.read_line(f)
 
 def read_spice(ckt, file, spice_reader=None):
     if spice_reader is None:
-        spice_reader = SpiceReader(ckt)
+        spice_reader = Reader(ckt)
     spice_reader.read(file)
     return spice_reader
     
@@ -72,89 +53,124 @@ def write_spice(cell, file=None):
     spice_writer.emit_cell()
 
 #-------------------------------------------------------------------------------
-def split_spice_line(line):
-    """ Split a spice line into tokens """
-
-    # add spaces around comment begin chars '*' or '$'
-    line = re.sub(r'\*', ' * ', line)
-    line = re.sub(r'\$', ' $ ', line)
-
-    # remove spaces around '='
-    line = re.sub(r'\s*=\s*', '=', line)
-
-    # remove all spaces from within "..." (spice parameter expressions)
-    def rm_space(matchobj):
-        return re.sub(r'\s+', '', matchobj.group(0))
-
-    line = re.sub(r'"([^"]*)"', rm_space, line)
-
-    return line.split()
-
-def parse_spice_line(tokens, skipcomments=True):
-    """
-    Parse spice statement
-
-    Returns:
-        {'type'   : [<major>, <minor>]
-         'args'   : [...]
-         'kwargs' : OrderedDict(...),
-         'comment': '...'
-        }
-
-        Or None
-    """
-    if not tokens:  # skip blank line
-        return None
-
-    if tokens[0] in ['*', '$']:
-        if skipcomments: return None
-        type = ['comment', tokens[0]]
-    elif tokens[0][0] == '.':
-        type = ['control', tokens[0][1:]]
-    else:
-        type = ['element', tokens[0][0]]
-
-    args = []
-    kwargs = collections.OrderedDict()
-    comment = ''
-
-    args_done = False
-    for pos, tok in enumerate(tokens):
-        if tok in ['*', '$']:
-            comment = " ".join(tokens[pos:])
-            break
-        elif '=' in tok:
-            k, v = tok.split('=')
-            if not v:
-                raise SyntaxError("missing parameter value: %s=?" % k)
-
-            kwargs[k] = v
-            args_done = True
-        else:
-            if args_done:
-                raise SyntaxError("unexpected token '%s' at pos '%s'"
-                                  % (tok, pos))
-            args.append(tok)
-
-    return dict(type=type, args=args, kwargs=kwargs, comment=comment)
-
-#-------------------------------------------------------------------------------
-class SpiceReader(object):
+class Reader(object):
     def __init__(self, ckt):
         self.ckt = ckt
         self._cell_stack = [ckt]
         self._current_cell = ckt
                         
+    @classmethod
+    def read_line(cls, f):
+        """
+        Reads a Spice file line-by-line, unwrapping the line continuations (+) in
+        the process. Every invocation returns a tuple (line, filename, lineno)
+        """
+        lineno = 0;
+        for line in f:
+            lineno += 1
+            line = line.rstrip('\n')
+
+            for next_line in f:
+                lineno += 1
+                next_line = next_line.rstrip('\n')
+
+                if next_line and next_line[0] == '+':
+                    if (RE_BLANK_LINE.match(line) or
+                        RE_COMMENT_LINE.match(line) or
+                        RE_TRAILING_COMMENT.search(line)):
+                        raise SyntaxError("invalid line continuation: %s, %s\n-> %s" %
+                                               (f.name, lineno, next_line))
+                    line = line.rstrip() + " " + next_line[1:].lstrip()
+                    continue
+                else:
+                    yield (line, f.name, lineno-1)
+                    line = next_line
+            yield (line, f.name, lineno)
+
+    @classmethod
+    def _tokenize(cls, line):
+        """ Split a spice line into tokens """
+
+        # add spaces around comment begin chars '*' or '$'
+        line = re.sub(r'\*', ' * ', line)
+        line = re.sub(r'\$', ' $ ', line)
+
+        # remove spaces around '='
+        line = re.sub(r'\s*=\s*', '=', line)
+
+        # remove all spaces from within "..." (spice parameter expressions)
+        def rm_space(matchobj):
+            return re.sub(r'\s+', '', matchobj.group(0))
+
+        line = re.sub(r'"([^"]*)"', rm_space, line)
+
+        return line.split()
+
+    @classmethod
+    def _parse(cls, tokens, skipcomments=True):
+        """
+        Parses a tokenized spice line and returns a statement-tree:
+
+            pstmt = {'type'   : [<major>, <minor>]
+                     'args'   : [...]
+                     'kwargs' : OrderedDict(...),
+                     'comment': '...'
+                    }
+
+            or None for blank or comment lines.
+
+        If skipcomments is False, then pstmt is returned.
+        """
+
+        if not tokens:  # skip blank line
+            return None
+
+        if tokens[0] in ['*', '$']:
+            if skipcomments: return None
+            type = ['comment', tokens[0]]
+        elif tokens[0][0] == '.':
+        #elif tokens[0].startswith('.'):
+            type = ['control', tokens[0][1:]]
+        else:
+            type = ['element', tokens[0][0]]
+
+        args = []
+        kwargs = collections.OrderedDict()
+        comment = ''
+
+        args_done = False
+        for pos, tok in enumerate(tokens):
+            if tok in ['*', '$']:
+                comment = " ".join(tokens[pos:])
+                break
+            elif '=' in tok:
+                k, v = tok.split('=')
+                if not v:
+                    raise SyntaxError("missing parameter value: %s=?" % k)
+
+                kwargs[k] = v
+                args_done = True
+            else:
+                if args_done:
+                    raise SyntaxError("unexpected token '%s' at pos '%s'"
+                                      % (tok, pos))
+                args.append(tok)
+
+        return dict(type=type, args=args, kwargs=kwargs, comment=comment)
+
     def read(self, f):
-        for (stmt, fname, lineno) in read_spice_line(f):
+        for (line, fname, lineno) in self.read_line(f):
             try:
-                tokens = split_spice_line(stmt)
-                pstmt = parse_spice_line(tokens)
-                if pstmt is None: continue
-                major, minor = pstmt['type']
+                tokens = self._tokenize(line)
+                pstmt = self._parse(tokens)
+
             except SyntaxError, e:
                 raise SyntaxError("%s [%s, %s]\n-> %s" %
-                                  (e.msg, fname, lineno, stmt))
+                                  (e.msg, fname, lineno, line))
+
+            if pstmt is None: continue
+
+            major, minor = pstmt['type']
 
             # Skip comments for now
             if major == 'comment': continue
