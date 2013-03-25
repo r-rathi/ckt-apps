@@ -28,23 +28,7 @@ RE_TRAILING_COMMENT = re.compile(r"\s*[$].*$")
 
 #-------------------------------------------------------------------------------
 class SyntaxError(Exception): pass
-
 class ParserError(Exception): pass
-
-#-------------------------------------------------------------------------------
-def read_line(f):
-    """Reads a Spice file line-by-line, unwrapping the line continuations (+)
-    in the process. Every invocation returns a tuple (line, filename, lineno)
-
-    This is just a module level wrapper over the Reader.read_line() method.
-    """
-    return Reader.read_line(f)
-
-#def write_spice_line(filename, max_line_size=None):
-    #file = open(filename, "w")
-def write_spice(cell, file=None):
-    spice_writer = SpiceWriter(cell) #, file)
-    spice_writer.emit_cell()
 
 #-------------------------------------------------------------------------------
 class Reader(object):
@@ -174,44 +158,6 @@ class Reader(object):
                 raise ParserError(
                     "unrecognized type '%s/%s' [%s, %s]\n-> %s" %
                     (major, minor, fname, lineno, stmt))
-
-
-    def read_old(self, file):
-        t0 = time.time()
-        for (line, filename, lineno) in read_spice_line(file):
-            orig_line = line
-
-            dl = 1000
-            if lineno % dl == 0:
-                t1 = time.time()
-                dt = (t1 - t0)*1e6 # usec
-                t0 = t1
-                print("%s usec/line: %s : %s" % (dt/dl, lineno, line))
-
-            if (RE_BLANK_LINE.match(line) or
-                RE_COMMENT_LINE.match(line)):
-                continue
-
-            line = RE_TRAILING_COMMENT.sub("", line)
-
-            line = line.split()
-            len_line = len(line)
-            card_type = line[0][0].lower()
-
-
-            if card_type == ".":
-                self._parse_kw_line(line)
-
-            elif card_type == "m" or card_type == "x" and \
-                 len_line > 5 and  line[5].lower() in self.ckt.macromodels:
-            #elif card_type in ('m', 'x'): 
-                self._parse_mx(line)
-
-            elif card_type == 'c':
-                self._parse_c(line)
-
-            elif card_type == 'x':
-                self._parse_x(line)
 
     #---------------------------------------------------------------------------
     def _process_subckt(self, pstmt):
@@ -363,11 +309,14 @@ class Reader(object):
         return parent_cell.add_pin(*args, **kwargs)
 
 #-------------------------------------------------------------------------------
-class SpiceWriter(object):
+class Writer(object):
     def __init__(self, cell):
         self.cell = cell
         self.file = None
         self.indent_stack = []
+
+    def write(self):
+        self.emit_cell()
 
     def reset_indent(self):
         self.indent_stack = []

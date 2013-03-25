@@ -49,12 +49,12 @@ def main(args=None):
     cell = ckt.find_cell(cellname)
     #print cell
 
-    spice.write_spice(cell)
+    ckt.write_spice(cell)
 
     print "-"*80
     cell.flatten_cell()
     #print cell
-    spice.write_spice(cell)
+    ckt.write_spice(cell)
 
 
     print "-"*80

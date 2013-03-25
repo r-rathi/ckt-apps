@@ -14,7 +14,7 @@ class TestSpiceReadLine:
                      "  d $ e")
         f.name = "<string>"
 
-        lines = [line for line in spice.read_line(f)]
+        lines = [line for line in spice.Reader.read_line(f)]
 
         assert lines[0] == ("a b",     "<string>", 1)
         assert lines[1] == ("* c",     "<string>", 2)
@@ -26,7 +26,7 @@ class TestSpiceReadLine:
                      "  d $ e")
         f.name = "<string>"
 
-        lines = [line for line in spice.read_line(f)]
+        lines = [line for line in spice.Reader.read_line(f)]
 
         assert lines[0] == ("a b c",     "<string>", 2)
         assert lines[1] == ("  d $ e",   "<string>", 3)
@@ -39,7 +39,7 @@ class TestSpiceReadLine:
                      "  d $ e")
         f.name = "<string>"
 
-        lines = [line for line in spice.read_line(f)]
+        lines = [line for line in spice.Reader.read_line(f)]
 
         assert lines[0] == ("a b c1 c2 c3", "<string>", 4)
         assert lines[1] == ("  d $ e",      "<string>", 5)
@@ -53,7 +53,7 @@ class TestSpiceReadLine:
         f.name = "<string>"
 
         with pytest.raises(spice.SyntaxError) as e:
-            lines = [line for line in spice.read_line(f)]
+            lines = [line for line in spice.Reader.read_line(f)]
 
         assert e.value.message == "invalid line continuation: <string>, 4\n-> + c2"
 
@@ -66,7 +66,7 @@ class TestSpiceReadLine:
         f.name = "<string>"
 
         with pytest.raises(spice.SyntaxError) as e:
-            lines = [line for line in spice.read_line(f)]
+            lines = [line for line in spice.Reader.read_line(f)]
 
         assert e.value.message == "invalid line continuation: <string>, 4\n-> + c2"
 
@@ -78,7 +78,7 @@ class TestSpiceReadLine:
         f.name = "<string>"
 
         with pytest.raises(spice.SyntaxError) as e:
-            lines = [line for line in spice.read_line(f)]
+            lines = [line for line in spice.Reader.read_line(f)]
 
         assert e.value.message == "invalid line continuation: <string>, 3\n-> + c2"
 

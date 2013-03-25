@@ -363,8 +363,16 @@ class Ckt(Cell):
     def read_spice(self, f):
         """ Read a spice file into the Ckt database
 
-        f -- file or filetype object
+        - f : file or filetype object
         """
         spice.Reader(self).read(f)
+
+    def write_spice(self, cell, f=None):
+        """ Write a cell to a file in the spice format
+
+        - cell : cell to write
+        - f    : file or filetype object
+        """
+        spice.Writer(cell).write()
 
 #-------------------------------------------------------------------------------
