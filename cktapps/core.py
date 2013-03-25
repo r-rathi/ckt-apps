@@ -114,6 +114,12 @@ class Parameter(object):
         pass
 
 class Cell(object):
+    """ Cell is the fundamental container of all the circuit elements. A
+    hierachical design is divided into multiple Cells. Cell maps to .subckt
+    in spice and module in verilog.
+    
+    A cell also acts as a declaration scope, allowing nested cell defintions.
+    """
     def __init__(self, name, params=None):
         self.name = name
         self.params = params or {}
@@ -343,7 +349,10 @@ class Cell(object):
 
 #-------------------------------------------------------------------------------
 class Ckt(Cell):
-    """ Circuit class represents the top-level of the design """
+    """ Ckt class represents the top-level of the design. Ckt is essentially a
+    Cell that acts as the root declaration scope. This maps to the top-level in
+    spice format or $root in verilog.
+    """
 
     def __init__(self, name=None, params=None):
         super(Ckt, self).__init__(name, params)
@@ -359,22 +368,18 @@ class Ckt(Cell):
         try:
             reader = self._reader_cache[format]
         except KeyError:
-            pass
-        else:
-            reader(self).read(f)
-            return
+            try:
+                mod = importlib.import_module("cktapps.formats." + format)
+            except ImportError:
+                raise FileFormatError("unsupported format '%s'" % format)
 
-        try:
-            mod = importlib.import_module("cktapps.formats." + format)
-        except ImportError:
-            raise FileFormatError("unsupported format '%s'" % format)
-
-        try:
-            reader = mod.Reader
-            self._reader_cache[format] = reader
-        except AttributeError:
-            raise InternalError("attribute 'Reader' missing from plugin '%s'"
-                                % format)
+            try:
+                reader = mod.Reader
+            except AttributeError:
+                raise InternalError("attribute 'Reader' missing from plugin '%s'"
+                                    % format)
+            else:
+                self._reader_cache[format] = reader
 
         reader(self).read(f)
 

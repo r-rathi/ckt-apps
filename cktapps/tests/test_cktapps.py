@@ -4,6 +4,7 @@ import pytest
 from StringIO import StringIO
 from collections import OrderedDict
 
+from cktapps import Ckt
 from cktapps.formats import spice
 
 class TestSpiceReadLine:
@@ -140,13 +141,6 @@ class TestSpiceSplitLine:
 
 
 class TestSpiceParseLine:
-    #@classmethod
-    #def setup_class(cls):
-    #    pass
-    #@classmethod
-    #def teardown_class(cls):
-    #    pass
-
     def test_element_args(self):
         tokens = 'm a1 a2 a3'.split()
         parsed = spice.Reader._parse(tokens)
@@ -267,3 +261,20 @@ class TestSpiceParseLine:
                           'comment': '$ c1 c2'
                          }
 
+class TestSpiceReader:
+    #@classmethod
+    #def setup_class(cls):
+    #    pass
+    #@classmethod
+    #def teardown_class(cls):
+    #    pass
+
+    def test_element_c(self):
+        f = StringIO("c2  a b cval\n"
+                     "c1 a c 1.0") 
+        f.name = "<string>"
+        ckt = Ckt()
+        ckt.read(f, format='spice')
+
+        print ckt.find_instance()
+        assert 0
