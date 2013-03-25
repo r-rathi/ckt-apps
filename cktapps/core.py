@@ -12,6 +12,8 @@ import collections, copy
 
 import importlib # Python 2.7 only?
 
+from cktapps.formats import spice
+
 #-------------------------------------------------------------------------------
 class InternalError(Exception): pass
 class LinkingError(Exception): pass
@@ -358,29 +360,11 @@ class Ckt(Cell):
         super(Ckt, self).__init__(name, params)
         self._reader_cache = {}
 
-    def read(self, f, format):
-        """ Read file into the Ckt database
+    def read_spice(self, f):
+        """ Read a spice file into the Ckt database
 
-        f      -- file or filetype object
-        format -- file format (language), e.g. spice
+        f -- file or filetype object
         """
-
-        try:
-            reader = self._reader_cache[format]
-        except KeyError:
-            try:
-                mod = importlib.import_module("cktapps.formats." + format)
-            except ImportError:
-                raise FileFormatError("unsupported format '%s'" % format)
-
-            try:
-                reader = mod.Reader
-            except AttributeError:
-                raise InternalError("attribute 'Reader' missing from plugin '%s'"
-                                    % format)
-            else:
-                self._reader_cache[format] = reader
-
-        reader(self).read(f)
+        spice.Reader(self).read(f)
 
 #-------------------------------------------------------------------------------
