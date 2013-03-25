@@ -122,8 +122,7 @@ class Reader(object):
         if tokens[0] in ['*', '$']:
             if skipcomments: return None
             type = ['comment', tokens[0]]
-        elif tokens[0][0] == '.':
-        #elif tokens[0].startswith('.'):
+        elif tokens[0].startswith('.'):
             type = ['control', tokens[0][1:]]
         else:
             type = ['element', tokens[0][0]]
