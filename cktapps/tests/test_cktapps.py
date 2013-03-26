@@ -139,6 +139,11 @@ class TestSpiceSplitLine:
         tokens = spice.Reader._tokenize(line)
         assert tokens == ['ab', '$', 'c', 'd']
 
+    def test_kwarg_tailing_comment(self):
+        line = 'ab c=$d'
+        tokens = spice.Reader._tokenize(line)
+        assert tokens == ['ab', 'c=', '$', 'd']
+
 
 class TestSpiceParseLine:
     def test_element_args(self):
@@ -261,20 +266,3 @@ class TestSpiceParseLine:
                           'comment': '$ c1 c2'
                          }
 
-#class TestSpiceReader:
-#    #@classmethod
-#    #def setup_class(cls):
-#    #    pass
-#    #@classmethod
-#    #def teardown_class(cls):
-#    #    pass
-
-#    def test_element_c(self):
-#        f = StringIO("c2  a b cval\n"
-#                     "c1 a c 1.0") 
-#        f.name = "<string>"
-#        ckt = Ckt()
-#        ckt.read(f, format='spice')
-
-#        print ckt.find_instance()
-#        assert 0

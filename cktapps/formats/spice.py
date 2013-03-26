@@ -69,12 +69,12 @@ class Reader(object):
     def _tokenize(cls, line):
         """ Split a spice line into tokens """
 
+        # remove spaces around '='
+        line = re.sub(r'\s*=\s*', '=', line)
+
         # add spaces around comment begin chars '*' or '$'
         line = re.sub(r'\*', ' * ', line)
         line = re.sub(r'\$', ' $ ', line)
-
-        # remove spaces around '='
-        line = re.sub(r'\s*=\s*', '=', line)
 
         # remove all spaces from within "..." (spice parameter expressions)
         def rm_space(matchobj):
@@ -142,8 +142,9 @@ class Reader(object):
                 pstmt = self._parse(tokens)
 
             except SyntaxError, e:
+                print("err", repr(e))
                 raise SyntaxError("%s [%s, %s]\n-> %s" %
-                                  (e.msg, fname, lineno, line))
+                                  (e.args[0], fname, lineno, line))
 
             if pstmt is None: continue
 
@@ -158,6 +159,10 @@ class Reader(object):
                 raise ParserError(
                     "unrecognized type '%s/%s' [%s, %s]\n-> %s" %
                     (major, minor, fname, lineno, stmt))
+            except SyntaxError, e:
+                print("err", repr(e))
+                raise SyntaxError("%s [%s, %s]\n-> %s" %
+                                  (e.args[0], fname, lineno, line))
 
     #---------------------------------------------------------------------------
     def _process_subckt(self, pstmt):
@@ -185,7 +190,11 @@ class Reader(object):
         args = pstmt['args']
         params = pstmt['kwargs']
 
-        name, type = args[1:]
+        try:
+            name, type = args[1:3]
+        except ValueError:
+            raise SyntaxError(".macromodel requires atleast 2 arguments")
+
         macromodel = self._add_macromodel(name, type) #, params=params)
         self._push_cell_scope(macromodel)
 
