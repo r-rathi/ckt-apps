@@ -50,7 +50,7 @@ def report_net(cell):
         load_cap = 0
 
         for i in caps:
-            net_cap += float(i.params['cap'])
+            net_cap += float(i.params['c'])
 
         for i in drivers:
             w = i.params.get('w') or i.params.get('W')

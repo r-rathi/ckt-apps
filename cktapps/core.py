@@ -48,7 +48,12 @@ class Instance(object):
     #    scope_path = "/".join([cell.name for cell in self.scope_path])
     #    return scope_path + "/" + self.name
 
-    def add_pin(self, pin):
+    def add_pinobj(self, pin):
+        self.pins.append(pin)
+
+    def add_pin(self, name, net):
+        port = Port(name)
+        pin = Pin(port, self, net)
         self.pins.append(pin)
 
     def find_pin(self, pinname=None):
@@ -124,7 +129,11 @@ class Cell(object):
     """
     def __init__(self, name, params=None):
         self.name = name
-        self.params = params or {}
+        if params is None:
+            self.params = collections.OrderedDict()
+        else:
+            self.params = params
+
         #self.objects = {}
         #self.objects['port']     = collections.OrderedDict()
         #self.objects['net']      = collections.OrderedDict()
@@ -169,12 +178,6 @@ class Cell(object):
         cell = Cell(name, params)
         self.cells[name.lower()] = cell
         return cell
-
-    def add_pin(self, name, inst, net):
-        port = Port(name)
-        pin = Pin(port, inst, net)
-        pin.instance.add_pin(pin)
-        return pin
 
     def find_port(self, name=None):
         if name:
@@ -270,7 +273,7 @@ class Cell(object):
                 #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
                 new_net  = self.find_net(netname_map[pin.net.name])
                 new_pin  = Pin(new_port, new_inst, new_net)
-                new_inst.add_pin(new_pin)
+                new_inst.add_pinobj(new_pin)
                 #print("adding new pin:", new_pin)
 
         del self.instances[inst.name.lower()]

@@ -266,3 +266,17 @@ class TestSpiceParseLine:
                           'comment': '$ c1 c2'
                          }
 
+class TestSpiceMacromodel:
+    def test_simple(self):
+        f = StringIO(
+            """
+.macromodel nch_mac nmos w=1 l=1
++ cg="w * l * 0.05" $ gate cap (F)
+            """)
+        f.name = "<string>"
+
+        ckt = Ckt()
+        ckt.read_spice(f)
+
+        assert 'nch_mac' in ckt.macromodels
+        assert ckt.macromodels['nch_mac'] == 'nmos'

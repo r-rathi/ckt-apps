@@ -142,7 +142,6 @@ class Reader(object):
                 pstmt = self._parse(tokens)
 
             except SyntaxError, e:
-                print("err", repr(e))
                 raise SyntaxError("%s [%s, %s]\n-> %s" %
                                   (e.args[0], fname, lineno, line))
 
@@ -158,9 +157,8 @@ class Reader(object):
             except KeyError:
                 raise ParserError(
                     "unrecognized type '%s/%s' [%s, %s]\n-> %s" %
-                    (major, minor, fname, lineno, stmt))
+                    (major, minor, fname, lineno, line))
             except SyntaxError, e:
-                print("err", repr(e))
                 raise SyntaxError("%s [%s, %s]\n-> %s" %
                                   (e.args[0], fname, lineno, line))
 
@@ -172,12 +170,14 @@ class Reader(object):
         cellname = args[1]
         portnames = args[2:]
 
-        cell = self._add_cell(cellname, params=params)
+        cell = self._current_cell.add_cell(cellname, params=params)
+        cell.scope_path = self._current_cell.scope_path + [self._current_cell]
+
         self._push_cell_scope(cell)
 
         for portname in portnames:
-            self._add_port(portname)
-            self._add_net(portname)
+            self._current_cell.add_port(portname)
+            self._current_cell.add_net(portname)
 
     def _process_ends(self, pstmt):
         try:
@@ -195,16 +195,8 @@ class Reader(object):
         except ValueError:
             raise SyntaxError(".macromodel requires atleast 2 arguments")
 
-        macromodel = self._add_macromodel(name, type) #, params=params)
-        self._push_cell_scope(macromodel)
-
-    def _process_endmacromodel(self, pstmt):
-        try:
-            self._pop_cell_scope()
-        except IndexError:
-            raise SyntaxError(
-                "keyword '.endmacromedel' unexpected here: %s, %s\n-> %s" %
-                (filename, lineno, orig_line))
+        self.ckt.macromodels[name] = type
+        #self._push_cell_scope(macromodel)
 
     def _process_param(self, pstmt):
         pass
@@ -216,61 +208,60 @@ class Reader(object):
         args = pstmt['args']
         params = pstmt['kwargs']
 
-        cname, plus, minus, cap = args
-        params.update(dict(cap=cap))
+        instname = args[0]
+        netnames = p, n = args[1:-1]
+        cellname = 'c'
+        params['c'] = args[-1]
 
-        net_plus = self._add_net(plus)
-        net_minus = self._add_net(minus)
+        inst = self._current_cell.add_instance(instname, cellname, params=params)
 
-        inst = self._add_instance(cname, 'c', params=params)
+        portnames = ['p', 'n']
 
-        self._add_pin('plus', inst, net_plus)
-        self._add_pin('minus', inst, net_minus)
+        for netname, portname in zip(netnames, portnames):
+            net = self._current_cell.add_net(netname)
+            inst.add_pin(portname, net)
 
     def _process_m(self, pstmt):
         args = pstmt['args']
         params = pstmt['kwargs']
 
-        mname, s, g, d, b, model = args[0:6]
-        if mname[0].lower() == "x":
-            mname = mname[1:]
+        instname = args[0]
+        netnames = d, g, s, b = args[1:-1]
+        cellname = args[-1]
 
-        net_s = self._add_net(s)
-        net_g = self._add_net(g)
-        net_d = self._add_net(d)
-        net_b = self._add_net(b)
+        if instname[0].lower() == "x":
+            instname = instname[1:]
 
-        inst = self._add_instance(mname, model, params=params)
+        inst = self._current_cell.add_instance(instname, cellname, params=params)
 
-        self._add_pin('s', inst, net_s)
-        self._add_pin('g', inst, net_g)
-        self._add_pin('d', inst, net_d)
-        self._add_pin('b', inst, net_b)
+        portnames = ['d', 'g', 's', 'b']
+
+        for netname, portname in zip(netnames, portnames):
+            net = self._current_cell.add_net(netname)
+            inst.add_pin(portname, net)
 
     def _process_x(self, pstmt):
         args = pstmt['args']
         params = pstmt['kwargs']
 
         instname = args[0][1:]
-        cellname = args[-1]
         netnames = args[1:-1]
-
+        cellname = args[-1]
 
         if cellname in self.ckt.macromodels:
             self._process_m(pstmt)
             return
 
-        inst = self._add_instance(instname, cellname, params=params)
+        inst = self._current_cell.add_instance(instname, cellname, params=params)
         inst.ishier = True
 
         for netname in netnames:
-            net = self._add_net(netname)
-            self._add_pin(None, inst, net)
+            net = self._current_cell.add_net(netname)
+            inst.add_pin(None, net)
 
     _process_stmt = {'control' : {'subckt'        : _process_subckt,
                                   'ends'          : _process_ends,
                                   'macromodel'    : _process_macromodel,
-                                  'endmacromodel' : _process_endmacromodel,
                                   'param'         : _process_param,
                                  },
                      'element' : {'r' : _process_r,
@@ -291,29 +282,29 @@ class Reader(object):
         return prev_cell
 
     #---------------------------------------------------------------------------
-    def _add_macromodel(self, name, type): #*args, **kwargs):
+    def x_add_macromodel(self, name, type, params):
         self.ckt.macromodels[name] = type
         return name
 
-    def _add_cell(self, *args, **kwargs):
+    def x_add_cell(self, *args, **kwargs):
         parent_cell = self._current_cell
         cell = parent_cell.add_cell(*args, **kwargs)
         cell.scope_path = parent_cell.scope_path + [parent_cell]
         return cell
 
-    def _add_port(self, *args, **kwargs):
+    def x_add_port(self, *args, **kwargs):
         parent_cell = self._current_cell
         return parent_cell.add_port(*args, **kwargs)
 
-    def _add_net(self, *args, **kwargs):
+    def x_add_net(self, *args, **kwargs):
         parent_cell = self._current_cell
         return parent_cell.add_net(*args, **kwargs)
 
-    def _add_instance(self, *args, **kwargs):
+    def x_add_instance(self, *args, **kwargs):
         parent_cell = self._current_cell
         return parent_cell.add_instance(*args, **kwargs)
 
-    def _add_pin(self, *args, **kwargs):
+    def x_add_pin(self, *args, **kwargs):
         parent_cell = self._current_cell
         return parent_cell.add_pin(*args, **kwargs)
 
@@ -390,7 +381,7 @@ class Writer(object):
         self.emit(' '.join(inst_netnames))
 
         if inst.cellname.lower() in ['c']: #, 'nch', 'pch']:
-            self.emitln(inst.params['cap'])
+            self.emitln(inst.params['c'])
         else:
             self.emit(inst.cellname)
             for param, val in inst.params.items():
