@@ -93,7 +93,7 @@ class Instance(object):
             self._eval_params.update(self.params)
 
         pstr = self._eval_params[param]
-        pstr = self._tostr(pstr)
+        pstr = pstr.lower()
         pstr = re.sub('"', '', pstr)
 
         ns = {}
