@@ -53,14 +53,12 @@ def report_net(cell):
             net_cap += float(i.params['c'])
 
         for i in drivers:
-            w = i.params.get('w') or i.params.get('W')
-            l = i.params.get('l') or i.params.get('L')
-            driver_cap += float(w) * float(l) * 0.05
+            cg = i.eval_param('cg')
+            driver_cap += cg
 
         for i in loads:
-            w = i.params.get('w') or i.params.get('W')
-            l = i.params.get('l') or i.params.get('L')
-            load_cap += float(w) * float(l) * 0.05
+            cg = i.eval_param('cg')
+            load_cap += cg
 
         if driver_cap == 0.0:
             fanout = 0.0

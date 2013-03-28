@@ -195,8 +195,9 @@ class Reader(object):
         except ValueError:
             raise SyntaxError(".macromodel requires atleast 2 arguments")
 
-        self.ckt.macromodels[name] = type
-        #self._push_cell_scope(macromodel)
+        portnames = args[3:]
+
+        self._current_cell.add_prim(name, type, portnames, params)
 
     def _process_param(self, pstmt):
         pass
@@ -248,7 +249,7 @@ class Reader(object):
         netnames = args[1:-1]
         cellname = args[-1]
 
-        if cellname in self.ckt.macromodels:
+        if cellname.lower() in self.ckt.prims:
             self._process_m(pstmt)
             return
 

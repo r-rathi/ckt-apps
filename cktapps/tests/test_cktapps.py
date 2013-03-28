@@ -278,5 +278,5 @@ class TestSpiceMacromodel:
         ckt = Ckt()
         ckt.read_spice(f)
 
-        assert 'nch_mac' in ckt.macromodels
-        assert ckt.macromodels['nch_mac'] == 'nmos'
+        assert 'nch_mac' in ckt.prims
+        assert ckt.prims['nch_mac'].type == 'nmos'

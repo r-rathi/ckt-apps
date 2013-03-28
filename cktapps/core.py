@@ -8,7 +8,7 @@ as well as modified through the core API interface.
 #-------------------------------------------------------------------------------
 from __future__ import absolute_import
 from __future__ import print_function
-import collections, copy
+import collections, copy, re
 
 import importlib # Python 2.7 only?
 
@@ -38,11 +38,17 @@ class Instance(object):
     def __init__(self, name, cellname, params):
         self.name = name
         self.cellname = cellname
-        self.params = params
         self.cell = None
         self.ishier = False
         self.pins = []
-        #self.parent_cell = None
+        self.parent_cell = None
+
+        if params is None:
+            self.params = {}
+        else:
+            self.params = params
+
+        self._eval_params = None
 
     #def full_name(self):
     #    scope_path = "/".join([cell.name for cell in self.scope_path])
@@ -64,6 +70,39 @@ class Instance(object):
 
     def get_param(self, param):
         return self.params[param]
+
+    def _tostr(self, s):
+        if isinstance(s, basestring):
+            return s
+        else:
+            return str(s)
+
+    def _destr(self, s):
+        if re.search('"', s):
+            return re.sub('"', '', s)
+        else:
+            return float(s)
+
+    def eval_param(self, param, namespace=None):
+        if namespace is None:
+            namespace = self.parent_cell.params
+
+        if self._eval_params is None:
+            prim = self.parent_cell.search_scope_prim(self.cellname)
+            self._eval_params = prim.params.copy()
+            self._eval_params.update(self.params)
+
+        pstr = self._eval_params[param]
+        pstr = self._tostr(pstr)
+        pstr = re.sub('"', '', pstr)
+
+        ns = {}
+        for k, v in self._eval_params.items():
+            ns[k.lower()] = self._destr(v.lower())
+
+        #print("Will eval %s with vars %s" % (pstr, ns)) # self._eval_params))
+        pval = eval(pstr, {"__builtins__":None}, ns) #self._eval_params)
+        return pval
 
     def bind(self, cell):
         cell_portnames = [port.name for port in cell.find_port()]
@@ -144,7 +183,7 @@ class Cell(object):
         self.nets = collections.OrderedDict()
         self.instances = collections.OrderedDict()
         self.cells = collections.OrderedDict()
-        self.macromodels = collections.OrderedDict()
+        self.prims = collections.OrderedDict()
         #self.pins = []
         self.scope_path = []
 
@@ -171,6 +210,7 @@ class Cell(object):
 
     def add_instance(self, name, refcellname, params): 
         instance = Instance(name, refcellname, params)
+        instance.parent_cell = self
         self.instances[name.lower()] = instance
         return instance
 
@@ -178,6 +218,11 @@ class Cell(object):
         cell = Cell(name, params)
         self.cells[name.lower()] = cell
         return cell
+
+    def add_prim(self, name, type, portnames, params):
+        prim = Prim(name, type, portnames, params)
+        self.prims[name.lower()] = prim
+        return prim
 
     def find_port(self, name=None):
         if name:
@@ -202,6 +247,12 @@ class Cell(object):
             return self.cells[name.lower()]
         else:
             return self.cells.values()
+
+    def find_prim(self, name=None):
+        if name:
+            return self.prims[name.lower()]
+        else:
+            return self.prims.values()
 
     def find_pin(self, instname=None, pinname=None):
         if instname:
@@ -298,6 +349,17 @@ class Cell(object):
                 continue
         raise KeyError(cellname)
 
+    def search_scope_prim(self, primname):
+        search_path = self.scope_path[:]
+        search_path.append(self)
+        search_path.reverse()
+        for cell in search_path:
+            try:
+                return cell.find_prim(primname)
+            except KeyError:
+                continue
+        raise KeyError(primname)
+
     def link(self):
         #resolve_references
         #bind
@@ -351,6 +413,13 @@ class Cell(object):
             r += indent*(lev+1) + str(cell) + "\n"
         r += indent*lev + "}"
         return r
+
+#-------------------------------------------------------------------------------
+class Prim(Cell):
+    def __init__(self, name, type, portnames, params=None):
+        super(Prim, self).__init__(name, params)
+        self.type = type
+        self.portnames = portnames
 
 #-------------------------------------------------------------------------------
 class Ckt(Cell):
