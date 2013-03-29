@@ -72,3 +72,15 @@ def report_net(cell):
                      ("%.1f" % fanout).rjust(8), sep=" ")
 
 #-------------------------------------------------------------------------------
+def report_hierarchy(cell):
+    print("Hierarchy report for cell: %s" % cell.name)
+    print(cell.name)
+    _print_cell_hierarchy(cell, 0) 
+
+def _print_cell_hierarchy(cell, indent):
+    for inst in cell.find_instance():
+        print("%s|-- %s (%s)" % (' ' * 4  * indent, inst.name, inst.cellname))
+        if inst.ishier:
+            _print_cell_hierarchy(inst.cell, indent + 1)
+            print()
+

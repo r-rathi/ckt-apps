@@ -186,6 +186,7 @@ class Cell(object):
         self.prims = collections.OrderedDict()
         #self.pins = []
         self.scope_path = []
+        self._ref_count = 0
 
     def full_name(self):
         scope_path = "/".join([cell.name for cell in self.scope_path])
@@ -394,6 +395,8 @@ class Cell(object):
             #if count % 10 == 0:
             #print("=> cell:", inst.cell.full_name())
 
+            cell._ref_count += 1
+
 
     def __repr__(self):
         lev = len(self.scope_path)
@@ -428,9 +431,18 @@ class Ckt(Cell):
     spice format or $root in verilog.
     """
 
-    def __init__(self, name=None, params=None):
+    def __init__(self, name="", params=None):
         super(Ckt, self).__init__(name, params)
         self._reader_cache = {}
+
+    def get_topcells(self):
+        top_cells = []
+        for cell in self.find_cell():
+            if cell._ref_count == 0:
+                top_cells.append(cell)
+        #print("Top cells: %s" % top_cells)
+        return top_cells
+
 
     def read_spice(self, f):
         """ Read a spice file into the Ckt database

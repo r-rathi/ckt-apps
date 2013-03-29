@@ -44,10 +44,15 @@ def main(args=None):
 
     ckt.resolve_refs()
 
-    cellname = arg_ns.cell
+    topcellnames = [cell.name for cell in ckt.get_topcells()]
+    print "Top cells: %s" % topcellnames
 
+    cellname = arg_ns.cell
     cell = ckt.find_cell(cellname)
     #print cell
+
+    #print "-"*80
+    #apps.report_hierarchy(cell)
 
     ckt.write_spice(cell)
 
@@ -56,10 +61,11 @@ def main(args=None):
     #print cell
     ckt.write_spice(cell)
 
-
     print "-"*80
-
     apps.report_net(cell)
+
+    #print "-"*80
+    #apps.report_hierarchy(cell)
 
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
