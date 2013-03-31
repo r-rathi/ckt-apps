@@ -22,9 +22,55 @@ import time
 import re, collections
 
 #-------------------------------------------------------------------------------
+class Utils(object):
+    pass
+
 RE_BLANK_LINE       = re.compile(r"^\s*$")
 RE_COMMENT_LINE     = re.compile(r"^\s*[*$].*$")
 RE_TRAILING_COMMENT = re.compile(r"\s*[$].*$")
+
+# Regex for spice number parsing based on:
+#    http://search.cpan.org/~wimv/Number-Spice-0.011/Spice.pm
+_RE_NUMBER = r'(?<!\w)[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[e][-+]?\d+)?'
+_RE_SPICE_SUFFIX = r'(?:[a-df-z][a-z]*)|(?:e[a-z]+)'
+RE_NUMBER = re.compile(_RE_NUMBER, re.IGNORECASE)
+RE_SPICE_SUFFIX = re.compile(_RE_SPICE_SUFFIX, re.IGNORECASE)
+RE_SPICE_NUMBER = re.compile(r'\s*(%s)(%s)?\s*' %
+                             (_RE_NUMBER, _RE_SPICE_SUFFIX), re.IGNORECASE)
+
+def spice_suffix_val(suffix):
+    if suffix is None:
+        return 1.0
+
+    suffix_val = {'t'  :  1e12,      # tera
+                  'g'  :  1e9,       # giga
+                  'meg':  1e6,       # mega
+                  'k'  :  1e3,       # kilo
+                  'm'  :  1e-3,      # milli
+                  'u'  :  1e-6,      # micro
+                  'n'  :  1e-9,      # nano
+                  'p'  :  1e-12,     # pico
+                  'f'  :  1e-15,     # femto
+                  'a'  :  1e-18      # atto
+                 }
+    suffix = suffix.lower()
+    return suffix_val.get(suffix[:3]) or suffix_val.get(suffix[:1], 1.0)
+
+def eval_spice_number(num_or_str):
+    if isinstance(num_or_str, (int, float)):
+        return num_or_str
+
+    m = RE_SPICE_NUMBER.match(num_or_str)
+    if m:
+        number, suffix = m.groups()
+        return float(number) * spice_suffix_val(suffix)
+    else:
+        return None
+
+def replace_spice_number(s):
+    def repl(m):
+        return str(eval_spice_number(m.group()))
+    return RE_SPICE_NUMBER.sub(repl, s)
 
 #-------------------------------------------------------------------------------
 class SyntaxError(Exception): pass

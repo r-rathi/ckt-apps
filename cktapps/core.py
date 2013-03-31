@@ -78,31 +78,43 @@ class Instance(object):
             return str(s)
 
     def _destr(self, s):
-        if re.search('"', s):
-            return re.sub('"', '', s)
+        if isinstance(s, basestring) and re.search('"', s):
+            #print('removing ":', s)
+            s = re.sub('"', '', s)
         else:
-            return float(s)
+            #print('converting to float', s)
+            s = float(s)
+        #print('>>', s)
+        return s
 
-    def eval_param(self, param, namespace=None):
-        if namespace is None:
-            namespace = self.parent_cell.params
-
+    def eval_param(self, param):
         if self._eval_params is None:
+            # initialize _eval_params with refcell params
+            self._eval_params = {}
             prim = self.parent_cell.search_scope_prim(self.cellname)
-            self._eval_params = prim.params.copy()
-            self._eval_params.update(self.params)
+            for k, v in prim.params.items():
+                v = self._destr(v.lower())
+                self._eval_params[k.lower()] = v
 
-        pstr = self._eval_params[param]
-        pstr = pstr.lower()
-        pstr = re.sub('"', '', pstr)
+            # eval instance (self) params in parent_cell namespace and
+            # add/overwrite to _eval_params
+            parent_cell_ns = {}
+            for k, v in self.parent_cell.params.items():
+                parent_cell_ns[k.lower()] = float(v)
 
-        ns = {}
-        for k, v in self._eval_params.items():
-            ns[k.lower()] = self._destr(v.lower())
+            for k, v in self.params.items():
+                v = self._destr(v.lower())
+                if isinstance(v, basestring):
+                    v = eval(v, {"__builtins__":None}, parent_cell_ns)
+                self._eval_params[k.lower()] = v
 
-        #print("Will eval %s with vars %s" % (pstr, ns)) # self._eval_params))
-        pval = eval(pstr, {"__builtins__":None}, ns) #self._eval_params)
-        return pval
+        p = self._eval_params[param.lower()]
+        p = re.sub('"', '', p)
+        if isinstance(p, basestring):
+            #print("Will eval %s with vars %s" % (p, self._eval_params))
+            p = eval(p, {"__builtins__":None}, self._eval_params)
+            #print(">>", p)
+        return p
 
     def bind(self, cell):
         cell_portnames = [port.name for port in cell.find_port()]

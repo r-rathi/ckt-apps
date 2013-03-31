@@ -18,16 +18,15 @@ from cktapps.formats import spice
 
 #-------------------------------------------------------------------------------
 def main(args=None):
-    parser = argparse.ArgumentParser(description="Report net fanout")
+    parser = argparse.ArgumentParser(description="Report hierarchy")
 
     parser.add_argument('spice_files', metavar='file', nargs='+',
                         type=argparse.FileType('r'), help='spice netlist file(s)')
 
-    parser.add_argument('--lib', nargs='+', type=argparse.FileType('r'),
+    parser.add_argument('--lib', type=argparse.FileType('r'),
                         help='lib file(s) with model (e.g. nch, pch) defintions')
 
-    parser.add_argument('--cell', required=True,
-                        help='name of the cell to be analyzed')
+    parser.add_argument('--cell', help='name of the cell to be analyzed')
 
     arg_ns = parser.parse_args(args)
 
@@ -36,36 +35,19 @@ def main(args=None):
     ckt = cktapps.Ckt()
 
     if arg_ns.lib:
-        for lib_file in arg_ns.lib:
-            ckt.read_spice(lib_file)
+        ckt.read_spice(arg_ns.lib)
 
     for spice_file in arg_ns.spice_files:
         ckt.read_spice(spice_file)
 
     ckt.resolve_refs()
 
-    #topcellnames = [cell.name for cell in ckt.get_topcells()]
-    #print "Top cells: %s" % topcellnames
+    if arg_ns.cell:
+        cell = ckt.find_cell(arg_ns.cell)
+    else:
+        cell = ckt.get_topcells()[0]
 
-    cellname = arg_ns.cell
-    cell = ckt.find_cell(cellname)
-    #print cell
-
-    #print "-"*80
-    #apps.report_hierarchy(cell)
-
-    ckt.write_spice(cell)
-
-    print "-"*80
-    cell.flatten_cell()
-    #print cell
-    ckt.write_spice(cell)
-
-    print "-"*80
-    apps.report_net(cell)
-
-    #print "-"*80
-    #apps.report_hierarchy(cell)
+    apps.report_hierarchy(cell)
 
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
