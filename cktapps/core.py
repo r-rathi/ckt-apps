@@ -18,6 +18,57 @@ from cktapps.formats import spice
 class InternalError(Exception): pass
 class LinkingError(Exception): pass
 class FileFormatError(Exception): pass
+class CktObjTypeError(Exception): pass
+class CktObjValueError(Exception): pass
+class CktObjDoesNotExist(Exception): pass
+
+#-------------------------------------------------------------------------------
+class CktObj(object):
+    def __init__(self, name):
+        self.name = name
+
+    def __repr__(self):
+        r = "<%s(name=%s)>" % (self.__class__.__name__, self.name)
+        return r
+
+
+class CktObjContainer(object):
+    def __init__(self, objtype):
+        self.objtype = objtype
+        self.objects = collections.OrderedDict()
+
+    def add(self, name, *args, **kwargs):
+        self.objects[name] = obj = self.objtype(name, *args, **kwargs)
+        return obj
+
+    def addobj(self, obj):
+        if not isinstance(obj, self.objtype):
+            raise CktObjTypeError("can't add '%r' to '%r'" % (obj, self))
+        if obj.name is None:
+            raise CktObjValueError("obj '%r' has no name" % obj)
+        self.objects[obj.name] = obj
+        return obj
+
+    def all(self):
+        return self.objects.itervalues()
+
+    def get(self, name):
+        try:
+            return self.objects[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+    def get_default(self, name, default=None):
+        return self.objects.get(name, default)
+
+    def filter(self, name):
+        import re
+        re_name = re.compile(r'^%s$' % name)
+        return (obj for obj in self.all() if re_name.match(obj.name))
+
+    def __repr__(self):
+        r = "<%s(type=%s)>" % (self.__class__.__name__, self.objtype.__name__)
+        return r
 
 #-------------------------------------------------------------------------------
 class Port(object):

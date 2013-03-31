@@ -4,6 +4,7 @@ import pytest
 from StringIO import StringIO
 from collections import OrderedDict
 
+from cktapps import core
 from cktapps import Ckt
 from cktapps.formats import spice
 
@@ -280,3 +281,69 @@ class TestSpiceMacromodel:
 
         assert 'nch_mac' in ckt.prims
         assert ckt.prims['nch_mac'].type == 'nmos'
+
+class TestCktObj:
+    def test_name(self):
+        obj = core.CktObj(name="myname")
+        assert obj.name == "myname"
+
+class TestCktObjContainer:
+    def test_add(self):
+        objcont = core.CktObjContainer(objtype=core.CktObj)
+        obj = objcont.add(name="myname")
+        assert obj.name == "myname"
+
+    def test_addobj(self):
+        objcont = core.CktObjContainer(objtype=core.CktObj)
+        obj = core.CktObj(name="myname")
+        assert objcont.addobj(obj) is obj
+
+    def test_addobj_noname(self):
+        objcont = core.CktObjContainer(objtype=core.CktObj)
+        obj = core.CktObj(name=None)
+        with pytest.raises(core.CktObjValueError) as e:
+            objcont.addobj(obj)
+
+    def test_addobj_badobj(self):
+        objcont = core.CktObjContainer(objtype=core.CktObj)
+        class BadCktObj: pass
+        badobj = BadCktObj()
+        with pytest.raises(core.CktObjTypeError) as e:
+            objcont.addobj(badobj)
+
+    def test_get(self):
+        objcont = core.CktObjContainer(objtype=core.CktObj)
+        obj1 = objcont.add(name="name1")
+        obj2 = objcont.add(name="name2")
+        assert objcont.get("name1") is obj1
+        assert objcont.get("name2") is obj2
+
+    def test_get_missing(self):
+        objcont = core.CktObjContainer(objtype=core.CktObj)
+        obj1 = objcont.add(name="name1")
+        with pytest.raises(core.CktObjDoesNotExist) as e:
+            objcont.get("name2")
+
+    def test_get_default(self):
+        objcont = core.CktObjContainer(objtype=core.CktObj)
+        obj1 = objcont.add(name="name1")
+        assert objcont.get_default("name2") is None
+        assert objcont.get_default("name2", obj1) is obj1
+
+    def test_all(self):
+        objcont = core.CktObjContainer(objtype=core.CktObj)
+        obj1 = objcont.add(name="name1")
+        obj2 = objcont.add(name="name2")
+        assert list(objcont.all()) == [obj1, obj2]
+
+    def test_filter(self):
+        objcont = core.CktObjContainer(objtype=core.CktObj)
+        obj1 = objcont.add(name="name1")
+        obj2 = objcont.add(name="name2")
+        objx1 = objcont.add(name="obx1")
+        objx2 = objcont.add(name="objx2")
+        assert list(objcont.filter(name="name.*")) == [obj1, obj2]
+        assert list(objcont.filter(name=".*x.")) == [objx1, objx2]
+        assert list(objcont.filter(name=".*1")) == [obj1, objx1]
+
+
