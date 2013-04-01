@@ -279,65 +279,68 @@ class TestSpiceMacromodel:
         ckt = Ckt()
         ckt.read_spice(f)
 
-        assert 'nch_mac' in ckt.prims
-        assert ckt.prims['nch_mac'].type == 'nmos'
+        assert ckt.prims.get('nch_mac').name == 'nch_mac'
+        assert ckt.prims.get('nch_mac').type == 'nmos'
 
 class TestCktObj:
     def test_name(self):
         obj = core.CktObj(name="myname")
         assert obj.name == "myname"
+        assert obj.container is None
 
 class TestCktObjContainer:
     def test_add(self):
-        objcont = core.CktObjContainer(objtype=core.CktObj)
+        objcont = core.CktObjContainer(objtype=core.CktObj, owner="myowner")
         obj = objcont.add(name="myname")
         assert obj.name == "myname"
+        assert obj.container.owner is "myowner"
 
     def test_addobj(self):
-        objcont = core.CktObjContainer(objtype=core.CktObj)
+        objcont = core.CktObjContainer(objtype=core.CktObj, owner="myowner")
         obj = core.CktObj(name="myname")
         assert objcont.addobj(obj) is obj
+        assert obj.container.owner is "myowner"
 
     def test_addobj_noname(self):
-        objcont = core.CktObjContainer(objtype=core.CktObj)
+        objcont = core.CktObjContainer(objtype=core.CktObj, owner="myowner")
         obj = core.CktObj(name=None)
         with pytest.raises(core.CktObjValueError) as e:
             objcont.addobj(obj)
 
     def test_addobj_badobj(self):
-        objcont = core.CktObjContainer(objtype=core.CktObj)
+        objcont = core.CktObjContainer(objtype=core.CktObj, owner="myowner")
         class BadCktObj: pass
         badobj = BadCktObj()
         with pytest.raises(core.CktObjTypeError) as e:
             objcont.addobj(badobj)
 
     def test_get(self):
-        objcont = core.CktObjContainer(objtype=core.CktObj)
+        objcont = core.CktObjContainer(objtype=core.CktObj, owner="myowner")
         obj1 = objcont.add(name="name1")
         obj2 = objcont.add(name="name2")
         assert objcont.get("name1") is obj1
         assert objcont.get("name2") is obj2
 
     def test_get_missing(self):
-        objcont = core.CktObjContainer(objtype=core.CktObj)
+        objcont = core.CktObjContainer(objtype=core.CktObj, owner="myowner")
         obj1 = objcont.add(name="name1")
         with pytest.raises(core.CktObjDoesNotExist) as e:
             objcont.get("name2")
 
     def test_get_default(self):
-        objcont = core.CktObjContainer(objtype=core.CktObj)
+        objcont = core.CktObjContainer(objtype=core.CktObj, owner="myowner")
         obj1 = objcont.add(name="name1")
         assert objcont.get_default("name2") is None
         assert objcont.get_default("name2", obj1) is obj1
 
     def test_all(self):
-        objcont = core.CktObjContainer(objtype=core.CktObj)
+        objcont = core.CktObjContainer(objtype=core.CktObj, owner="myowner")
         obj1 = objcont.add(name="name1")
         obj2 = objcont.add(name="name2")
         assert list(objcont.all()) == [obj1, obj2]
 
     def test_filter(self):
-        objcont = core.CktObjContainer(objtype=core.CktObj)
+        objcont = core.CktObjContainer(objtype=core.CktObj, owner="myowner")
         obj1 = objcont.add(name="name1")
         obj2 = objcont.add(name="name2")
         objx1 = objcont.add(name="obx1")

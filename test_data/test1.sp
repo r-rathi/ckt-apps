@@ -12,8 +12,8 @@ c3 y vdd 2.5e-15
 
 ********************************************************************************
 .subckt inv2 a y vdd vss wp=200e-9 wn=200e-9
-xmp1 y a vdd vdd pch_mac w="wp" l=20e-9 ad=7e-15 as=7e-15 pd=270e-9 ps=270e-9
-xmn1 y a vss vss nch_mac w="wn" l=20e-9 ad=7e-15 as=7e-15 pd=270e-9 ps=270e-9
+xmp1 y a vdd vdd pch_mac w=200e-9 l=20e-9 ad=7e-15 as=7e-15 pd=270e-9 ps=270e-9
+xmn1 y a vss vss nch_mac w=200e-9 l=20e-9 ad=7e-15 as=7e-15 pd=270e-9 ps=270e-9
 
 c1 a vss 1e-15
 c2 y vss 1.5e-15

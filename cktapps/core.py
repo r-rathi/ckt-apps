@@ -24,8 +24,14 @@ class CktObjDoesNotExist(Exception): pass
 
 #-------------------------------------------------------------------------------
 class CktObj(object):
+    """ Base circuit object """
+
     def __init__(self, name):
         self.name = name
+        self.container = None
+
+    def copy(self, name):
+        pass
 
     def __repr__(self):
         r = "<%s(name=%s)>" % (self.__class__.__name__, self.name)
@@ -33,12 +39,17 @@ class CktObj(object):
 
 
 class CktObjContainer(object):
-    def __init__(self, objtype):
+    """ Object container indexed with name """
+
+    def __init__(self, objtype, owner):
         self.objtype = objtype
         self.objects = collections.OrderedDict()
+        self.owner = owner
 
     def add(self, name, *args, **kwargs):
-        self.objects[name] = obj = self.objtype(name, *args, **kwargs)
+        obj = self.objtype(name, *args, **kwargs)
+        obj.container = self
+        self.objects[name] = obj
         return obj
 
     def addobj(self, obj):
@@ -46,6 +57,7 @@ class CktObjContainer(object):
             raise CktObjTypeError("can't add '%r' to '%r'" % (obj, self))
         if obj.name is None:
             raise CktObjValueError("obj '%r' has no name" % obj)
+        obj.container = self
         self.objects[obj.name] = obj
         return obj
 
@@ -61,14 +73,26 @@ class CktObjContainer(object):
     def get_default(self, name, default=None):
         return self.objects.get(name, default)
 
+    def delete(self, name):
+        del self.objects[name]
+
     def filter(self, name):
         import re
         re_name = re.compile(r'^%s$' % name)
         return (obj for obj in self.all() if re_name.match(obj.name))
 
+    def as_list(self):
+        pass
+    def as_dict(self):
+        pass
+    def as_set(self):
+        pass
+
     def __repr__(self):
         r = "<%s(type=%s)>" % (self.__class__.__name__, self.objtype.__name__)
         return r
+
+
 
 #-------------------------------------------------------------------------------
 class Port(object):
@@ -142,7 +166,7 @@ class Instance(object):
         if self._eval_params is None:
             # initialize _eval_params with refcell params
             self._eval_params = {}
-            prim = self.parent_cell.search_scope_prim(self.cellname)
+            prim = self.container.owner.search_scope_prim(self.cellname)
             for k, v in prim.params.items():
                 v = self._destr(v.lower())
                 self._eval_params[k.lower()] = v
@@ -150,9 +174,10 @@ class Instance(object):
             # eval instance (self) params in parent_cell namespace and
             # add/overwrite to _eval_params
             parent_cell_ns = {}
-            for k, v in self.parent_cell.params.items():
+            for k, v in self.container.owner.params.items():
                 parent_cell_ns[k.lower()] = float(v)
 
+            #print("pns:", self, self.container, self.container.owner.name, parent_cell_ns)
             for k, v in self.params.items():
                 v = self._destr(v.lower())
                 if isinstance(v, basestring):
@@ -168,7 +193,7 @@ class Instance(object):
         return p
 
     def bind(self, cell):
-        cell_portnames = [port.name for port in cell.find_port()]
+        cell_portnames = [port.name for port in cell.ports.all()]
 
         if (len(cell_portnames) == len(self.pins)):
             for pin, portname in zip(self.pins, cell_portnames):
@@ -222,7 +247,7 @@ class Parameter(object):
     def value():
         pass
 
-class Cell(object):
+class Cell(CktObj):
     """ Cell is the fundamental container of all the circuit elements. A
     hierachical design is divided into multiple Cells. Cell maps to .subckt
     in spice and module in verilog.
@@ -230,24 +255,19 @@ class Cell(object):
     A cell also acts as a declaration scope, allowing nested cell defintions.
     """
     def __init__(self, name, params=None):
-        self.name = name
+        super(Cell, self).__init__(name)
+
         if params is None:
             self.params = collections.OrderedDict()
         else:
             self.params = params
 
-        #self.objects = {}
-        #self.objects['port']     = collections.OrderedDict()
-        #self.objects['net']      = collections.OrderedDict()
-        #self.objects['instance'] = collections.OrderedDict()
-        #self.objects['cell']     = collections.OrderedDict()
-        #self.objects['pin']      = []
-        self.ports = collections.OrderedDict()
-        self.nets = collections.OrderedDict()
-        self.instances = collections.OrderedDict()
-        self.cells = collections.OrderedDict()
-        self.prims = collections.OrderedDict()
-        #self.pins = []
+        self.cells = CktObjContainer(objtype=Cell, owner=self)
+        self.prims = CktObjContainer(objtype=Prim, owner=self)
+        self.ports = CktObjContainer(objtype=Port, owner=self)
+        self.nets = CktObjContainer(objtype=Net, owner=self)
+        self.instances = CktObjContainer(objtype=Instance, owner=self)
+
         self.scope_path = []
         self._ref_count = 0
 
@@ -262,73 +282,8 @@ class Cell(object):
     #    if objname:
     #        return 
 
-    def add_port(self, name):
-        port = Port(name)
-        self.ports[name.lower()] = port
-        return port
-
-    def add_net(self, name):
-        net = Net(name)
-        self.nets[name.lower()] = net
-        return net
-
-    def add_instance(self, name, refcellname, params): 
-        instance = Instance(name, refcellname, params)
-        instance.parent_cell = self
-        self.instances[name.lower()] = instance
-        return instance
-
-    def add_cell(self, name, params):
-        cell = Cell(name, params)
-        self.cells[name.lower()] = cell
-        return cell
-
-    def add_prim(self, name, type, portnames, params):
-        prim = Prim(name, type, portnames, params)
-        self.prims[name.lower()] = prim
-        return prim
-
-    def find_port(self, name=None):
-        if name:
-            return self.ports[name.lower()]
-        else:
-            return self.ports.values()
-
-    def find_net(self, name=None):
-        if name:
-            return self.nets[name.lower()]
-        else:
-            return self.nets.values()
-
-    def find_instance(self, name=None):
-        if name:
-            return self.instances[name.lower()]
-        else:
-            return self.instances.values()
-
-    def find_cell(self, name=None):
-        if name:
-            return self.cells[name.lower()]
-        else:
-            return self.cells.values()
-
-    def find_prim(self, name=None):
-        if name:
-            return self.prims[name.lower()]
-        else:
-            return self.prims.values()
-
-    def find_pin(self, instname=None, pinname=None):
-        if instname:
-            return self.find_instance(instname).find_pin(pinname)
-        else:
-            pins = []
-            for inst in self.find_instance():
-                pins += inst.find_pin(pinname)
-            return pins
-
     def bind_inst2cell(self, inst, cell):
-        cell_portnames = [port.name for port in cell.find_port()]
+        cell_portnames = [port.name for port in cell.ports.all()]
         inst_pins = [pin for pin in self.find_pin() if pin.instance == inst]
 
         if (len(cell_portnames) == len(inst_pins)):
@@ -357,45 +312,46 @@ class Cell(object):
     def flatten_instance(self, inst):
         inst_netnames = [pin.net.name for pin in inst.find_pin()]
         #TODO: check whether refs resolved or not
-        cell_portnames = [port.name for port in inst.cell.find_port()]
+        cell_portnames = [port.name for port in inst.cell.ports.all()]
         port2net_map = {}
         for portname, netname in zip(cell_portnames, inst_netnames):
             port2net_map[portname] = netname
 
         netname_map = {}
-        for net in inst.cell.find_net():
+        for net in inst.cell.nets.all():
             old_netname = net.name
             if old_netname in port2net_map:
                 new_netname = port2net_map[old_netname]
             else:
                 new_netname = inst.name + "/" + old_netname
             netname_map[old_netname] = new_netname
-            self.add_net(new_netname)
+            self.nets.add(new_netname)
             #print("adding", new_net)
 
         #print("netname_map:", netname_map)
 
-        for sub_inst in inst.cell.find_instance():
+        for sub_inst in inst.cell.instances.all():
             new_inst = copy.copy(sub_inst)
             new_inst.name = inst.name + "/" + new_inst.name
             new_inst.pins = []
             #print("\nadding", new_inst)
             #self.add_instance(new_inst)
-            self.instances[new_inst.name.lower()] = new_inst #FIXME: api
+            #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
+            self.instances.addobj(new_inst)
             for pin in sub_inst.find_pin():
                 #print("\nprocessing pin:", pin)
                 new_port = copy.copy(pin.port)
                 #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
-                new_net  = self.find_net(netname_map[pin.net.name])
+                new_net  = self.nets.get(netname_map[pin.net.name])
                 new_pin  = Pin(new_port, new_inst, new_net)
                 new_inst.add_pinobj(new_pin)
                 #print("adding new pin:", new_pin)
 
-        del self.instances[inst.name.lower()]
+        self.instances.delete(inst.name)
 
     def flatten_cell(self, max_depth=1000):
         for depth in range(max_depth):
-            hier_insts = [inst for inst in self.find_instance() if inst.ishier]
+            hier_insts = [inst for inst in self.instances.all() if inst.ishier]
             #print("depth:", depth, [i.name for i in hier_insts])
             if len(hier_insts) == 0:
                 return
@@ -408,10 +364,10 @@ class Cell(object):
         search_path.reverse()
         for cell in search_path:
             try:
-                return cell.find_cell(cellname)
-            except KeyError:
+                return cell.cells.get(cellname)
+            except CktObjDoesNotExist:
                 continue
-        raise KeyError(cellname)
+        raise CktObjDoesNotExist(cellname)
 
     def search_scope_prim(self, primname):
         search_path = self.scope_path[:]
@@ -419,10 +375,10 @@ class Cell(object):
         search_path.reverse()
         for cell in search_path:
             try:
-                return cell.find_prim(primname)
-            except KeyError:
+                return cell.prims.get(primname)
+            except CktObjDoesNotExist:
                 continue
-        raise KeyError(primname)
+        raise CktObjDoesNotExist(primname)
 
     def link(self):
         #resolve_references
@@ -430,14 +386,14 @@ class Cell(object):
         pass
 
     def resolve_refs(self): # link_design link_cell link_ckt
-        for cell in self.find_cell():
+        for cell in self.cells.all():
             cell.resolve_refs()
 
         #cache = {}
         #count = 0
-        hier_insts = [inst for inst in self.find_instance() if inst.ishier]
+        hier_insts = [inst for inst in self.instances.all() if inst.ishier]
         for inst in hier_insts:
-        #for inst in self.find_instance():
+        #for inst in self.instances.all():
             #count += 1
             #if count % 10 == 0:
             #print("Resolving refs... inst: %s/%s" % (self.full_name(),

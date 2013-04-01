@@ -216,14 +216,16 @@ class Reader(object):
         cellname = args[1]
         portnames = args[2:]
 
-        cell = self._current_cell.add_cell(cellname, params=params)
+        #cell = self._current_cell.add_cell(cellname, params=params)
+        cell = self._current_cell.cells.add(cellname, params=params)
+
         cell.scope_path = self._current_cell.scope_path + [self._current_cell]
 
         self._push_cell_scope(cell)
 
         for portname in portnames:
-            self._current_cell.add_port(portname)
-            self._current_cell.add_net(portname)
+            self._current_cell.ports.add(portname)
+            self._current_cell.nets.add(portname)
 
     def _process_ends(self, pstmt):
         try:
@@ -243,7 +245,7 @@ class Reader(object):
 
         portnames = args[3:]
 
-        self._current_cell.add_prim(name, type, portnames, params)
+        self._current_cell.prims.add(name, type, portnames, params)
 
     def _process_param(self, pstmt):
         pass
@@ -260,12 +262,12 @@ class Reader(object):
         cellname = 'c'
         params['c'] = args[-1]
 
-        inst = self._current_cell.add_instance(instname, cellname, params=params)
+        inst = self._current_cell.instances.add(instname, cellname, params=params)
 
         portnames = ['p', 'n']
 
         for netname, portname in zip(netnames, portnames):
-            net = self._current_cell.add_net(netname)
+            net = self._current_cell.nets.add(netname)
             inst.add_pin(portname, net)
 
     def _process_m(self, pstmt):
@@ -279,12 +281,12 @@ class Reader(object):
         if instname[0].lower() == "x":
             instname = instname[1:]
 
-        inst = self._current_cell.add_instance(instname, cellname, params=params)
+        inst = self._current_cell.instances.add(instname, cellname, params=params)
 
         portnames = ['d', 'g', 's', 'b']
 
         for netname, portname in zip(netnames, portnames):
-            net = self._current_cell.add_net(netname)
+            net = self._current_cell.nets.add(netname)
             inst.add_pin(portname, net)
 
     def _process_x(self, pstmt):
@@ -295,15 +297,15 @@ class Reader(object):
         netnames = args[1:-1]
         cellname = args[-1]
 
-        if cellname.lower() in self.ckt.prims:
+        if self.ckt.prims.get_default(cellname.lower()):
             self._process_m(pstmt)
             return
 
-        inst = self._current_cell.add_instance(instname, cellname, params=params)
+        inst = self._current_cell.instances.add(instname, cellname, params=params)
         inst.ishier = True
 
         for netname in netnames:
-            net = self._current_cell.add_net(netname)
+            net = self._current_cell.nets.add(netname)
             inst.add_pin(None, net)
 
     _process_stmt = {'control' : {'subckt'        : _process_subckt,
@@ -341,15 +343,15 @@ class Reader(object):
 
     def x_add_port(self, *args, **kwargs):
         parent_cell = self._current_cell
-        return parent_cell.add_port(*args, **kwargs)
+        return parent_cell.ports.add(*args, **kwargs)
 
     def x_add_net(self, *args, **kwargs):
         parent_cell = self._current_cell
-        return parent_cell.add_net(*args, **kwargs)
+        return parent_cell.nets.add(*args, **kwargs)
 
     def x_add_instance(self, *args, **kwargs):
         parent_cell = self._current_cell
-        return parent_cell.add_instance(*args, **kwargs)
+        return parent_cell.instances.add(*args, **kwargs)
 
     def x_add_pin(self, *args, **kwargs):
         parent_cell = self._current_cell
@@ -411,11 +413,11 @@ class Writer(object):
         self.emitln(self.cell.name)
 
     def emit_ports(self):
-        portnames = [port.name for port in self.cell.find_port()]
+        portnames = [port.name for port in self.cell.ports.all()]
         self.emitln(' '.join(portnames))
 
     def emit_instances(self):
-        for inst in self.cell.find_instance():
+        for inst in self.cell.instances.all():
             self.emit_instance(inst)
 
     def emit_instance(self, inst):

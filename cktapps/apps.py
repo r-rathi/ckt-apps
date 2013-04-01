@@ -5,10 +5,10 @@ import collections
 #-------------------------------------------------------------------------------
 def report_net(cell):
     net_info = collections.OrderedDict()
-    for net in cell.find_net():
+    for net in cell.nets.all():
         net_info[net.name] = dict(drivers=[], loads=[], caps=[])
 
-    for inst in cell.find_instance():
+    for inst in cell.instances.all():
         for pin in inst.find_pin():
             if pin.port.name in ('s', 'd'):
                 net_info[pin.net.name]['drivers'].append(pin.instance)
@@ -78,7 +78,7 @@ def report_hierarchy(cell):
     _print_cell_hierarchy(cell, 0) 
 
 def _print_cell_hierarchy(cell, indent):
-    for inst in cell.find_instance():
+    for inst in cell.instances.all():
         print("%s|-- %s (%s)" % (' ' * 4  * indent, inst.name, inst.cellname))
         if inst.ishier:
             _print_cell_hierarchy(inst.cell, indent + 1)

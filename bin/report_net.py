@@ -48,7 +48,7 @@ def main(args=None):
     #print "Top cells: %s" % topcellnames
 
     cellname = arg_ns.cell
-    cell = ckt.find_cell(cellname)
+    cell = ckt.cells.get(cellname)
     #print cell
 
     #print "-"*80
