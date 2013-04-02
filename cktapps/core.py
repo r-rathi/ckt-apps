@@ -10,8 +10,6 @@ from __future__ import absolute_import
 from __future__ import print_function
 import collections, copy, re
 
-import importlib # Python 2.7 only?
-
 from cktapps.formats import spice
 
 #-------------------------------------------------------------------------------
@@ -34,8 +32,8 @@ class CktObj(object):
         pass
 
     def __repr__(self):
-        r = "<%s(name=%s)>" % (self.__class__.__name__, self.name)
-        return r
+        return "<%s(name=%s) id=%s>" % (self.__class__.__name__, self.name,
+                                        hex(id(self)))
 
 
 class CktObjContainer(object):
@@ -77,7 +75,6 @@ class CktObjContainer(object):
         del self.objects[name]
 
     def filter(self, name):
-        import re
         re_name = re.compile(r'^%s$' % name)
         return (obj for obj in self.all() if re_name.match(obj.name))
 
@@ -89,34 +86,98 @@ class CktObjContainer(object):
         pass
 
     def __repr__(self):
-        r = "<%s(type=%s)>" % (self.__class__.__name__, self.objtype.__name__)
-        return r
+        return "<%s(type=%s)>" % (self.__class__.__name__,
+                                  self.objtype.__name__)
 
+class CktObjList(object):
+    def __init__(self, objtype, owner):
+        self.objtype = objtype
+        self.objects = []
+        self.owner = owner
 
+    def add(self, *args, **kwargs):
+        obj = self.objtype(*args, **kwargs)
+        obj.container = self
+        self.objects.append(obj)
+        return obj
+
+    def addobj(self, obj):
+        if not isinstance(obj, self.objtype):
+            raise CktObjTypeError("can't add '%r' to '%r'" % (obj, self))
+        obj.container = self
+        self.objects.append(obj)
+        return obj
+
+    def all(self):
+        return self.objects
+
+    def get(self, name):
+        for obj in self.objects:
+            if obj.name == name:
+                return obj
+        raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+    def get_default(self, name, default=None):
+        for obj in self.objects:
+            if obj.name == name:
+                return obj
+        return default
+
+    def index(self, name):
+        for i, obj in enumerate(self.objects):
+            if obj.name == name:
+                return i
+        raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+    def delete(self, name):
+        i = self.index(name)
+        self.objects.pop(i)
+
+    def filter(self, name):
+        re_name = re.compile(r'^%s$' % name)
+        return (obj for obj in self.objects if re_name.match(obj.name))
+
+    def __repr__(self):
+        return "<%s(type=%s)>" % (self.__class__.__name__,
+                                  self.objtype.__name__)
+
+class PinContainer(CktObjList):
+    def __init__(self, owner):
+        super(PinContainer, self).__init__(Pin, owner)
+
+    def add(self, name, net):
+        port = Port(name)
+        pin = Pin(port, self.owner, net)
+        pin.container = self
+        self.objects.append(pin)
+        return pin
+
+    def addobj(self, obj):
+        if not isinstance(obj, self.objtype):
+            raise CktObjTypeError("can't add '%r' to '%r'" % (obj, self))
+        obj.container = self
+        self.objects.append(obj)
+        return obj
 
 #-------------------------------------------------------------------------------
-class Port(object):
+class Port(CktObj):
     def __init__(self, name):
-        self.name = name
-    
-    def __repr__(self):
-        return "%s(%s)" % (self.__class__.__name__, self.name)
+        super(Port, self).__init__(name)
 
-class Net(object):
+class Net(CktObj):
     def __init__(self, name):
-        self.name = name
-    
-    def __repr__(self):
-        return "%s(%s)" % (self.__class__.__name__, self.name)
+        super(Net, self).__init__(name)
 
-class Instance(object):
+class Instance(CktObj):
     def __init__(self, name, cellname, params):
-        self.name = name
+        super(Instance, self).__init__(name)
+
         self.cellname = cellname
         self.cell = None
         self.ishier = False
-        self.pins = []
         self.parent_cell = None
+
+        self.pins = PinContainer(owner=self)
 
         if params is None:
             self.params = {}
@@ -129,10 +190,12 @@ class Instance(object):
     #    scope_path = "/".join([cell.name for cell in self.scope_path])
     #    return scope_path + "/" + self.name
 
-    def add_pinobj(self, pin):
+    def add_pins_by_pos(self, *netnames): pass
+    def add_pins_by_name(self, **portmap): pass
+    def xadd_pinobj(self, pin):
         self.pins.append(pin)
 
-    def add_pin(self, name, net):
+    def xadd_pin(self, name, net):
         port = Port(name)
         pin = Pin(port, self, net)
         self.pins.append(pin)
@@ -228,16 +291,19 @@ class Instance(object):
 
 class Pin(object):
     def __init__(self, port, instance, net):
+        #super(Pin, self).__init__(name)
+        #super(Pin, self).__init__(port.name)
         self.port = port
         self.instance = instance
         self.net = net
 
     def __repr__(self):
-        return "%s(%r, %r, %r)" % (self.__class__.__name__, \
+        return "%s(%r, %r, %r)" % (self.__class__.__name__,
                                    self.port, self.instance, self.net)
-class Parameter(object):
+
+class Parameter(CktObj):
     def __init__(self, name, value, namespace):
-        self.name = name
+        super(Parameter, self).__init__(name)
         self._value = value
         self._namespace = namespace
 
@@ -310,7 +376,7 @@ class Cell(CktObj):
 
 
     def flatten_instance(self, inst):
-        inst_netnames = [pin.net.name for pin in inst.find_pin()]
+        inst_netnames = [pin.net.name for pin in inst.pins.all()]
         #TODO: check whether refs resolved or not
         cell_portnames = [port.name for port in inst.cell.ports.all()]
         port2net_map = {}
@@ -326,25 +392,25 @@ class Cell(CktObj):
                 new_netname = inst.name + "/" + old_netname
             netname_map[old_netname] = new_netname
             self.nets.add(new_netname)
-            #print("adding", new_net)
+            #print("adding", new_netname)
 
         #print("netname_map:", netname_map)
 
         for sub_inst in inst.cell.instances.all():
             new_inst = copy.copy(sub_inst)
             new_inst.name = inst.name + "/" + new_inst.name
-            new_inst.pins = []
+            new_inst.pins = PinContainer(owner=new_inst) #FIXME: api
             #print("\nadding", new_inst)
             #self.add_instance(new_inst)
             #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
             self.instances.addobj(new_inst)
-            for pin in sub_inst.find_pin():
+            for pin in sub_inst.pins.all():
                 #print("\nprocessing pin:", pin)
                 new_port = copy.copy(pin.port)
                 #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
                 new_net  = self.nets.get(netname_map[pin.net.name])
                 new_pin  = Pin(new_port, new_inst, new_net)
-                new_inst.add_pinobj(new_pin)
+                new_inst.pins.addobj(new_pin)
                 #print("adding new pin:", new_pin)
 
         self.instances.delete(inst.name)
