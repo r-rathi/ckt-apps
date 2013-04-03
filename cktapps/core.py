@@ -190,6 +190,7 @@ class Instance(object):
     #    scope_path = "/".join([cell.name for cell in self.scope_path])
     #    return scope_path + "/" + self.name
 
+    #---------------------------------------------------------------------------
     def add_pins_by_pos(self, *netnames): pass
     def add_pins_by_name(self, **portmap): pass
     def add_pin(self, name, net):
@@ -207,12 +208,13 @@ class Instance(object):
     def all_pins(self):
         return iter(self.pins)
 
-    def find_pin(self, pinname=None):
-        if pinname:
-            return [pin for pin in self.pins if pin.port.name == pinname]
-        else:
-            return self.pins
+    def get_pin(self, name):
+        for pin in self.pins:
+            if pin.name == name:
+                return pin
+        raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
+    #---------------------------------------------------------------------------
     def get_param(self, param):
         return self.params[param]
 
@@ -262,6 +264,7 @@ class Instance(object):
             #print(">>", p)
         return p
 
+    #---------------------------------------------------------------------------
     def bind(self, cell):
         cell_portnames = [port.name for port in cell.all_ports()]
 
@@ -288,6 +291,7 @@ class Instance(object):
         inst.cell = cell
 
 
+    #---------------------------------------------------------------------------
     def __repr__(self):
         if self.cell:
             ref_cellname = self.cell.full_name()
@@ -298,15 +302,12 @@ class Instance(object):
 
 class Pin(object):
     def __init__(self, port, instance, net):
-        #super(Pin, self).__init__(name)
-        #super(Pin, self).__init__(port.name)
         self.port = port
         self.instance = instance
         self.net = net
 
     def __repr__(self):
-        return "%s(%r, %r, %r)" % (self.__class__.__name__,
-                                   self.port, self.instance, self.net)
+        return "Pin(%r, %r, %r)" % (port, self.instance, self.net)
 
 class Parameter(object):
     def __init__(self, name, value, namespace):
@@ -355,6 +356,7 @@ class Cell(object):
     #    if objname:
     #        return 
 
+    #---------------------------------------------------------------------------
     def add_cell(self, name, *args, **kwargs):
         if name is None:
             raise CktObjValueError("cell has no name")
@@ -372,6 +374,7 @@ class Cell(object):
         except KeyError:
             raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
+    #---------------------------------------------------------------------------
     def add_prim(self, name, *args, **kwargs):
         if name is None:
             raise CktObjValueError("prim has no name")
@@ -383,6 +386,7 @@ class Cell(object):
     def all_prims(self):
         return self.prims.itervalues()
 
+    #---------------------------------------------------------------------------
     def add_instance(self, name, *args, **kwargs):
         if name is None:
             raise CktObjValueError("instance has no name")
@@ -412,6 +416,7 @@ class Cell(object):
     def del_instance(self, name):
         del self.instances[name]
 
+    #---------------------------------------------------------------------------
     def add_net(self, name, *args, **kwargs):
         if name is None:
             raise CktObjValueError("net has no name")
@@ -429,6 +434,7 @@ class Cell(object):
         except KeyError:
             raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
+    #---------------------------------------------------------------------------
     def add_port(self, name, *args, **kwargs):
         if name is None:
             raise CktObjValueError("port has no name")
@@ -440,6 +446,7 @@ class Cell(object):
     def all_ports(self):
         return self.ports.itervalues()
 
+    #---------------------------------------------------------------------------
     def bind_inst2cell(self, inst, cell):
         cell_portnames = [port.name for port in cell.all_ports()]
         inst_pins = [pin for pin in self.find_pin() if pin.instance == inst]
@@ -466,55 +473,6 @@ class Cell(object):
 
         inst.cell = cell
 
-
-    def flatten_instance(self, inst):
-        inst_netnames = [pin.net.name for pin in inst.all_pins()]
-        #TODO: check whether refs resolved or not
-        cell_portnames = [port.name for port in inst.cell.all_ports()]
-        port2net_map = {}
-        for portname, netname in zip(cell_portnames, inst_netnames):
-            port2net_map[portname] = netname
-
-        netname_map = {}
-        for net in inst.cell.all_nets():
-            old_netname = net.name
-            if old_netname in port2net_map:
-                new_netname = port2net_map[old_netname]
-            else:
-                new_netname = inst.name + "/" + old_netname
-            netname_map[old_netname] = new_netname
-            self.add_net(new_netname)
-            #print("adding", new_netname)
-
-        #print("netname_map:", netname_map)
-
-        for sub_inst in inst.cell.all_instances():
-            new_inst = copy.copy(sub_inst)
-            new_inst.name = inst.name + "/" + new_inst.name
-            new_inst.pins = [] #FIXME: api
-            #print("\nadding", new_inst)
-            #self.add_instance(new_inst)
-            #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
-            self.add_instance_obj(new_inst)
-            for pin in sub_inst.all_pins():
-                #print("\nprocessing pin:", pin)
-                new_port = copy.copy(pin.port)
-                #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
-                new_net  = self.nets.get(netname_map[pin.net.name])
-                new_pin  = Pin(new_port, new_inst, new_net)
-                new_inst.add_pinobj(new_pin)
-                #print("adding new pin:", new_pin)
-
-        self.del_instance(inst.name)
-
-    def flatten_cell(self, max_depth=1000):
-        for depth in range(max_depth):
-            hier_insts = [inst for inst in self.all_instances() if inst.ishier]
-            #print("depth:", depth, [i.name for i in hier_insts])
-            if len(hier_insts) == 0:
-                return
-            for inst in hier_insts:
-                self.flatten_instance(inst)
 
     def search_scope(self, cellname):
         search_path = self.scope_path[:]
@@ -575,6 +533,57 @@ class Cell(object):
 
             cell._ref_count += 1
 
+    #---------------------------------------------------------------------------
+    def flatten_instance(self, inst):
+        inst_netnames = [pin.net.name for pin in inst.all_pins()]
+        #TODO: check whether refs resolved or not
+        cell_portnames = [port.name for port in inst.cell.all_ports()]
+        port2net_map = {}
+        for portname, netname in zip(cell_portnames, inst_netnames):
+            port2net_map[portname] = netname
+
+        netname_map = {}
+        for net in inst.cell.all_nets():
+            old_netname = net.name
+            if old_netname in port2net_map:
+                new_netname = port2net_map[old_netname]
+            else:
+                new_netname = inst.name + "/" + old_netname
+            netname_map[old_netname] = new_netname
+            self.add_net(new_netname)
+            #print("adding", new_netname)
+
+        #print("netname_map:", netname_map)
+
+        for sub_inst in inst.cell.all_instances():
+            new_inst = copy.copy(sub_inst)
+            new_inst.name = inst.name + "/" + new_inst.name
+            new_inst.pins = [] #FIXME: api
+            #print("\nadding", new_inst)
+            #self.add_instance(new_inst)
+            #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
+            self.add_instance_obj(new_inst)
+            for pin in sub_inst.all_pins():
+                #print("\nprocessing pin:", pin)
+                new_port = copy.copy(pin.port)
+                #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
+                new_net  = self.nets.get(netname_map[pin.net.name])
+                new_pin  = Pin(new_port, new_inst, new_net)
+                new_inst.add_pinobj(new_pin)
+                #print("adding new pin:", new_pin)
+
+        self.del_instance(inst.name)
+
+    def flatten_cell(self, max_depth=1000):
+        for depth in range(max_depth):
+            hier_insts = [inst for inst in self.all_instances() if inst.ishier]
+            #print("depth:", depth, [i.name for i in hier_insts])
+            if len(hier_insts) == 0:
+                return
+            for inst in hier_insts:
+                self.flatten_instance(inst)
+
+    #---------------------------------------------------------------------------
     def __repr__(self):
         return "<Cell(name=%s)>" % self.name
 
