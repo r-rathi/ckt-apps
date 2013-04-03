@@ -9,7 +9,7 @@ def report_net(cell):
         net_info[net.name] = dict(drivers=[], loads=[], caps=[])
 
     for inst in cell.all_instances():
-        for pin in inst.pins.all():
+        for pin in inst.all_pins():
             if pin.port.name in ('s', 'd'):
                 net_info[pin.net.name]['drivers'].append(pin.instance)
             elif pin.port.name == 'g':

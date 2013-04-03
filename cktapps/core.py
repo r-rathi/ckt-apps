@@ -160,24 +160,24 @@ class PinContainer(CktObjList):
         return obj
 
 #-------------------------------------------------------------------------------
-class Port(CktObj):
+class Port(object):
     def __init__(self, name):
-        super(Port, self).__init__(name)
+        self.name = name
 
-class Net(CktObj):
+class Net(object):
     def __init__(self, name):
-        super(Net, self).__init__(name)
+        self.name = name
 
-class Instance(CktObj):
+class Instance(object):
     def __init__(self, name, cellname, params):
-        super(Instance, self).__init__(name)
+        self.name = name
 
         self.cellname = cellname
         self.cell = None
         self.ishier = False
         self.parent_cell = None
 
-        self.pins = PinContainer(owner=self)
+        self.pins = []
 
         if params is None:
             self.params = {}
@@ -192,13 +192,20 @@ class Instance(CktObj):
 
     def add_pins_by_pos(self, *netnames): pass
     def add_pins_by_name(self, **portmap): pass
-    def xadd_pinobj(self, pin):
-        self.pins.append(pin)
-
-    def xadd_pin(self, name, net):
+    def add_pin(self, name, net):
         port = Port(name)
         pin = Pin(port, self, net)
         self.pins.append(pin)
+
+    def add_pinobj(self, pin):
+        if not isinstance(pin, Pin):
+            raise CktObjTypeError("can't add '%r' to '%r'" % (pin, self))
+        pin.instance = self
+        self.pins.append(pin)
+        return pin
+
+    def all_pins(self):
+        return iter(self.pins)
 
     def find_pin(self, pinname=None):
         if pinname:
@@ -301,9 +308,9 @@ class Pin(object):
         return "%s(%r, %r, %r)" % (self.__class__.__name__,
                                    self.port, self.instance, self.net)
 
-class Parameter(CktObj):
+class Parameter(object):
     def __init__(self, name, value, namespace):
-        super(Parameter, self).__init__(name)
+        self.name = name
         self._value = value
         self._namespace = namespace
 
@@ -313,7 +320,7 @@ class Parameter(CktObj):
     def value():
         pass
 
-class Cell(CktObj):
+class Cell(object):
     """ Cell is the fundamental container of all the circuit elements. A
     hierachical design is divided into multiple Cells. Cell maps to .subckt
     in spice and module in verilog.
@@ -321,7 +328,7 @@ class Cell(CktObj):
     A cell also acts as a declaration scope, allowing nested cell defintions.
     """
     def __init__(self, name, params=None):
-        super(Cell, self).__init__(name)
+        self.name = name
 
         if params is None:
             self.params = collections.OrderedDict()
@@ -461,7 +468,7 @@ class Cell(CktObj):
 
 
     def flatten_instance(self, inst):
-        inst_netnames = [pin.net.name for pin in inst.pins.all()]
+        inst_netnames = [pin.net.name for pin in inst.all_pins()]
         #TODO: check whether refs resolved or not
         cell_portnames = [port.name for port in inst.cell.all_ports()]
         port2net_map = {}
@@ -484,18 +491,18 @@ class Cell(CktObj):
         for sub_inst in inst.cell.all_instances():
             new_inst = copy.copy(sub_inst)
             new_inst.name = inst.name + "/" + new_inst.name
-            new_inst.pins = PinContainer(owner=new_inst) #FIXME: api
+            new_inst.pins = [] #FIXME: api
             #print("\nadding", new_inst)
             #self.add_instance(new_inst)
             #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
             self.add_instance_obj(new_inst)
-            for pin in sub_inst.pins.all():
+            for pin in sub_inst.all_pins():
                 #print("\nprocessing pin:", pin)
                 new_port = copy.copy(pin.port)
                 #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
                 new_net  = self.nets.get(netname_map[pin.net.name])
                 new_pin  = Pin(new_port, new_inst, new_net)
-                new_inst.pins.addobj(new_pin)
+                new_inst.add_pinobj(new_pin)
                 #print("adding new pin:", new_pin)
 
         self.del_instance(inst.name)

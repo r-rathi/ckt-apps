@@ -268,7 +268,7 @@ class Reader(object):
 
         for netname, portname in zip(netnames, portnames):
             net = self._current_cell.add_net(netname)
-            inst.pins.add(portname, net)
+            inst.add_pin(portname, net)
 
     def _process_m(self, pstmt):
         args = pstmt['args']
@@ -287,7 +287,7 @@ class Reader(object):
 
         for netname, portname in zip(netnames, portnames):
             net = self._current_cell.add_net(netname)
-            inst.pins.add(portname, net)
+            inst.add_pin(portname, net)
 
     def _process_x(self, pstmt):
         args = pstmt['args']
@@ -306,7 +306,7 @@ class Reader(object):
 
         for netname in netnames:
             net = self._current_cell.add_net(netname)
-            inst.pins.add(None, net)
+            inst.add_pin(None, net)
 
     _process_stmt = {'control' : {'subckt'        : _process_subckt,
                                   'ends'          : _process_ends,
@@ -426,7 +426,7 @@ class Writer(object):
         else:
             self.emit('x' + inst.name)
 
-        inst_netnames = [pin.net.name for pin in inst.pins.all()]
+        inst_netnames = [pin.net.name for pin in inst.all_pins()]
         self.emit(' '.join(inst_netnames))
 
         if inst.cellname.lower() in ['c']: #, 'nch', 'pch']:
