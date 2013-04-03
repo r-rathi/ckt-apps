@@ -245,7 +245,7 @@ class Reader(object):
 
         portnames = args[3:]
 
-        self._current_cell.prims.add(name, type, portnames, params)
+        self._current_cell.add_prim(name, type, portnames, params)
 
     def _process_param(self, pstmt):
         pass
@@ -297,7 +297,7 @@ class Reader(object):
         netnames = args[1:-1]
         cellname = args[-1]
 
-        if self.ckt.prims.get_default(cellname.lower()):
+        if cellname.lower() in self.ckt.prims:  #FIXME: api
             self._process_m(pstmt)
             return
 

@@ -330,7 +330,8 @@ class Cell(CktObj):
 
         self.cells = collections.OrderedDict()
         #self.cells = CktObjContainer(objtype=Cell, owner=self)
-        self.prims = CktObjContainer(objtype=Prim, owner=self)
+        self.prims = collections.OrderedDict()
+        #self.prims = CktObjContainer(objtype=Prim, owner=self)
         self.ports = CktObjContainer(objtype=Port, owner=self)
         self.nets = CktObjContainer(objtype=Net, owner=self)
         self.instances = collections.OrderedDict()
@@ -366,6 +367,17 @@ class Cell(CktObj):
             return self.cells[name]
         except KeyError:
             raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+    def add_prim(self, name, *args, **kwargs):
+        if name is None:
+            raise CktObjValueError("prim has no name")
+        prim = Prim(name, *args, **kwargs)
+        prim.owner = self
+        self.prims[name] = prim
+        return prim
+
+    def all_prims(self):
+        return self.prims.itervalues()
 
     def add_instance(self, name, *args, **kwargs):
         if name is None:
@@ -490,8 +502,8 @@ class Cell(CktObj):
         search_path.reverse()
         for cell in search_path:
             try:
-                return cell.prims.get(primname)
-            except CktObjDoesNotExist:
+                return cell.prims[primname]
+            except KeyError:
                 continue
         raise CktObjDoesNotExist(primname)
 
