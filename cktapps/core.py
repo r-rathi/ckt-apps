@@ -329,13 +329,10 @@ class Cell(CktObj):
             self.params = params
 
         self.cells = collections.OrderedDict()
-        #self.cells = CktObjContainer(objtype=Cell, owner=self)
         self.prims = collections.OrderedDict()
-        #self.prims = CktObjContainer(objtype=Prim, owner=self)
         self.ports = CktObjContainer(objtype=Port, owner=self)
-        self.nets = CktObjContainer(objtype=Net, owner=self)
+        self.nets = collections.OrderedDict()
         self.instances = collections.OrderedDict()
-        #self.instances = CktObjContainer(objtype=Instance, owner=self)
 
         self.scope_path = []
         self._ref_count = 0
@@ -408,6 +405,23 @@ class Cell(CktObj):
     def del_instance(self, name):
         del self.instances[name]
 
+    def add_net(self, name, *args, **kwargs):
+        if name is None:
+            raise CktObjValueError("net has no name")
+        net = Net(name, *args, **kwargs)
+        net.owner = self
+        self.nets[name] = net
+        return net
+
+    def all_nets(self):
+        return self.nets.itervalues()
+
+    def get_net(self, name):
+        try:
+            return self.nets[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
     def bind_inst2cell(self, inst, cell):
         cell_portnames = [port.name for port in cell.ports.all()]
         inst_pins = [pin for pin in self.find_pin() if pin.instance == inst]
@@ -444,14 +458,14 @@ class Cell(CktObj):
             port2net_map[portname] = netname
 
         netname_map = {}
-        for net in inst.cell.nets.all():
+        for net in inst.cell.all_nets():
             old_netname = net.name
             if old_netname in port2net_map:
                 new_netname = port2net_map[old_netname]
             else:
                 new_netname = inst.name + "/" + old_netname
             netname_map[old_netname] = new_netname
-            self.nets.add(new_netname)
+            self.add_net(new_netname)
             #print("adding", new_netname)
 
         #print("netname_map:", netname_map)

@@ -225,7 +225,7 @@ class Reader(object):
 
         for portname in portnames:
             self._current_cell.ports.add(portname)
-            self._current_cell.nets.add(portname)
+            self._current_cell.add_net(portname)
 
     def _process_ends(self, pstmt):
         try:
@@ -267,7 +267,7 @@ class Reader(object):
         portnames = ['p', 'n']
 
         for netname, portname in zip(netnames, portnames):
-            net = self._current_cell.nets.add(netname)
+            net = self._current_cell.add_net(netname)
             inst.pins.add(portname, net)
 
     def _process_m(self, pstmt):
@@ -286,7 +286,7 @@ class Reader(object):
         portnames = ['d', 'g', 's', 'b']
 
         for netname, portname in zip(netnames, portnames):
-            net = self._current_cell.nets.add(netname)
+            net = self._current_cell.add_net(netname)
             inst.pins.add(portname, net)
 
     def _process_x(self, pstmt):
@@ -305,7 +305,7 @@ class Reader(object):
         inst.ishier = True
 
         for netname in netnames:
-            net = self._current_cell.nets.add(netname)
+            net = self._current_cell.add_net(netname)
             inst.pins.add(None, net)
 
     _process_stmt = {'control' : {'subckt'        : _process_subckt,
@@ -347,7 +347,7 @@ class Reader(object):
 
     def x_add_net(self, *args, **kwargs):
         parent_cell = self._current_cell
-        return parent_cell.nets.add(*args, **kwargs)
+        return parent_cell.add_net(*args, **kwargs)
 
     def x_add_instance(self, *args, **kwargs):
         parent_cell = self._current_cell

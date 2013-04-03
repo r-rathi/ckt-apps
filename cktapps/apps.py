@@ -5,7 +5,7 @@ import collections
 #-------------------------------------------------------------------------------
 def report_net(cell):
     net_info = collections.OrderedDict()
-    for net in cell.nets.all():
+    for net in cell.all_nets():
         net_info[net.name] = dict(drivers=[], loads=[], caps=[])
 
     for inst in cell.all_instances():
