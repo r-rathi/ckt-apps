@@ -421,7 +421,7 @@ class Writer(object):
             self.emit_instance(inst)
 
     def emit_instance(self, inst):
-        if inst.cellname.lower() in ['c']: #, 'nch', 'pch']:
+        if inst.refname.lower() in ['c']: #, 'nch', 'pch']:
             self.emit('c' + inst.name)
         else:
             self.emit('x' + inst.name)
@@ -429,10 +429,10 @@ class Writer(object):
         inst_netnames = [pin.net.name for pin in inst.all_pins()]
         self.emit(' '.join(inst_netnames))
 
-        if inst.cellname.lower() in ['c']: #, 'nch', 'pch']:
+        if inst.refname.lower() in ['c']: #, 'nch', 'pch']:
             self.emitln(inst.params['c'])
         else:
-            self.emit(inst.cellname)
+            self.emit(inst.refname)
             for param, val in inst.params.items():
                 self.emit('%s=%s' % (param, val))
             self.emitln('', sep='')

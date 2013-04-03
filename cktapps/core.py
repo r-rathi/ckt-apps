@@ -169,13 +169,13 @@ class Net(object):
         self.name = name
 
 class Instance(object):
-    def __init__(self, name, cellname, params):
+    def __init__(self, name, refname, params):
         self.name = name
 
-        self.cellname = cellname
-        self.cell = None
+        self.refname = refname
+        self.ref = None
         self.ishier = False
-        self.parent_cell = None
+        self.owner = None
 
         self.pins = []
 
@@ -238,7 +238,7 @@ class Instance(object):
         if self._eval_params is None:
             # initialize _eval_params with refcell params
             self._eval_params = {}
-            prim = self.owner.search_scope_prim(self.cellname)
+            prim = self.owner.search_scope_prim(self.refname)
             for k, v in prim.params.items():
                 v = self._destr(v.lower())
                 self._eval_params[k.lower()] = v
@@ -288,7 +288,7 @@ class Instance(object):
                                           self.full_name() + "/" + inst.name,
                                           cell.full_name() ))
 
-        inst.cell = cell
+        inst.ref = cell
 
 
     #---------------------------------------------------------------------------
@@ -471,7 +471,7 @@ class Cell(object):
                                           self.full_name() + "/" + inst.name,
                                           cell.full_name() ))
 
-        inst.cell = cell
+        inst.ref = cell
 
 
     def search_scope(self, cellname):
@@ -515,21 +515,21 @@ class Cell(object):
             #if count % 10 == 0:
             #print("Resolving refs... inst: %s/%s" % (self.full_name(),
             #                                          inst.name), end='')
-            if inst.cell is None:
+            if inst.ref is None:
                 #try:
-                #    cell = cache[inst.cellname]
+                #    cell = cache[inst.refname]
                 #except KeyError:
                 try:
-                    cell = self.search_scope(inst.cellname)
-                    #cache[inst.cellname] = cell
+                    cell = self.search_scope(inst.refname)
+                    #cache[inst.refname] = cell
                 except KeyError:
                     raise LinkingError("failed to resolve ref '%s' of '%s' in cell '%s'" %
-                                       (inst.cellname, inst.name, self.full_name()))
+                                       (inst.refname, inst.name, self.full_name()))
 
             #self.bind_inst2cell(inst, cell)
-            inst.cell = cell
+            inst.ref = cell
             #if count % 10 == 0:
-            #print("=> cell:", inst.cell.full_name())
+            #print("=> cell:", inst.ref.full_name())
 
             cell._ref_count += 1
 
@@ -537,13 +537,13 @@ class Cell(object):
     def flatten_instance(self, inst):
         inst_netnames = [pin.net.name for pin in inst.all_pins()]
         #TODO: check whether refs resolved or not
-        cell_portnames = [port.name for port in inst.cell.all_ports()]
+        cell_portnames = [port.name for port in inst.ref.all_ports()]
         port2net_map = {}
         for portname, netname in zip(cell_portnames, inst_netnames):
             port2net_map[portname] = netname
 
         netname_map = {}
-        for net in inst.cell.all_nets():
+        for net in inst.ref.all_nets():
             old_netname = net.name
             if old_netname in port2net_map:
                 new_netname = port2net_map[old_netname]
@@ -555,7 +555,7 @@ class Cell(object):
 
         #print("netname_map:", netname_map)
 
-        for sub_inst in inst.cell.all_instances():
+        for sub_inst in inst.ref.all_instances():
             new_inst = copy.copy(sub_inst)
             new_inst.name = inst.name + "/" + new_inst.name
             new_inst.pins = [] #FIXME: api
@@ -626,7 +626,7 @@ class Ckt(Cell):
 
     def get_topcells(self):
         top_cells = []
-        for cell in self.find_cell():
+        for cell in self.all_cells():
             if cell._ref_count == 0:
                 top_cells.append(cell)
         #print("Top cells: %s" % top_cells)
