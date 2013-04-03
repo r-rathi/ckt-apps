@@ -23,11 +23,10 @@ def main(args=None):
     parser.add_argument('spice_files', metavar='file', nargs='+',
                         type=argparse.FileType('r'), help='spice netlist file(s)')
 
-    parser.add_argument('--lib', nargs='+', type=argparse.FileType('r'),
+    parser.add_argument('--lib', type=argparse.FileType('r'),
                         help='lib file(s) with model (e.g. nch, pch) defintions')
 
-    parser.add_argument('--cell', required=True,
-                        help='name of the cell to be analyzed')
+    parser.add_argument('--cell', help='name of the cell to be analyzed')
 
     arg_ns = parser.parse_args(args)
 
@@ -36,8 +35,7 @@ def main(args=None):
     ckt = cktapps.Ckt()
 
     if arg_ns.lib:
-        for lib_file in arg_ns.lib:
-            ckt.read_spice(lib_file)
+        ckt.read_spice(arg_ns.lib)
 
     for spice_file in arg_ns.spice_files:
         ckt.read_spice(spice_file)
@@ -47,8 +45,10 @@ def main(args=None):
     #topcellnames = [cell.name for cell in ckt.get_topcells()]
     #print "Top cells: %s" % topcellnames
 
-    cellname = arg_ns.cell
-    cell = ckt.cells.get(cellname)
+    if arg_ns.cell:
+        cell = ckt.get_cell(arg_ns.cell)
+    else:
+        cell = ckt.get_topcells()[0]
     #print cell
 
     #print "-"*80

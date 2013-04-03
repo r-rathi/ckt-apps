@@ -43,7 +43,7 @@ def main(args=None):
     ckt.resolve_refs()
 
     if arg_ns.cell:
-        cell = ckt.find_cell(arg_ns.cell)
+        cell = ckt.get_cell(arg_ns.cell)
     else:
         cell = ckt.get_topcells()[0]
 
