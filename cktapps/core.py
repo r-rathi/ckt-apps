@@ -229,7 +229,7 @@ class Instance(CktObj):
         if self._eval_params is None:
             # initialize _eval_params with refcell params
             self._eval_params = {}
-            prim = self.container.owner.search_scope_prim(self.cellname)
+            prim = self.owner.search_scope_prim(self.cellname)
             for k, v in prim.params.items():
                 v = self._destr(v.lower())
                 self._eval_params[k.lower()] = v
@@ -237,7 +237,7 @@ class Instance(CktObj):
             # eval instance (self) params in parent_cell namespace and
             # add/overwrite to _eval_params
             parent_cell_ns = {}
-            for k, v in self.container.owner.params.items():
+            for k, v in self.owner.params.items():
                 parent_cell_ns[k.lower()] = float(v)
 
             #print("pns:", self, self.container, self.container.owner.name, parent_cell_ns)
@@ -333,7 +333,8 @@ class Cell(CktObj):
         self.prims = CktObjContainer(objtype=Prim, owner=self)
         self.ports = CktObjContainer(objtype=Port, owner=self)
         self.nets = CktObjContainer(objtype=Net, owner=self)
-        self.instances = CktObjContainer(objtype=Instance, owner=self)
+        self.instances = collections.OrderedDict()
+        #self.instances = CktObjContainer(objtype=Instance, owner=self)
 
         self.scope_path = []
         self._ref_count = 0
@@ -365,6 +366,35 @@ class Cell(CktObj):
             return self.cells[name]
         except KeyError:
             raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+    def add_instance(self, name, *args, **kwargs):
+        if name is None:
+            raise CktObjValueError("instance has no name")
+        instance = Instance(name, *args, **kwargs)
+        instance.owner = self
+        self.instances[name] = instance
+        return instance
+
+    def add_instance_obj(self, instance):
+        if not isinstance(instance, Instance):
+            raise CktObjTypeError("can't add '%r' to '%r'" % (instance, self))
+        if instance.name is None:
+            raise CktObjValueError("instance '%r' has no name" % instance)
+        instance.owner = self
+        self.instances[instance.name] = instance
+        return instance
+
+    def all_instances(self):
+        return self.instances.itervalues()
+
+    def get_instance(self, name):
+        try:
+            return self.instances[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+    def del_instance(self, name):
+        del self.instances[name]
 
     def bind_inst2cell(self, inst, cell):
         cell_portnames = [port.name for port in cell.ports.all()]
@@ -414,14 +444,14 @@ class Cell(CktObj):
 
         #print("netname_map:", netname_map)
 
-        for sub_inst in inst.cell.instances.all():
+        for sub_inst in inst.cell.all_instances():
             new_inst = copy.copy(sub_inst)
             new_inst.name = inst.name + "/" + new_inst.name
             new_inst.pins = PinContainer(owner=new_inst) #FIXME: api
             #print("\nadding", new_inst)
             #self.add_instance(new_inst)
             #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
-            self.instances.addobj(new_inst)
+            self.add_instance_obj(new_inst)
             for pin in sub_inst.pins.all():
                 #print("\nprocessing pin:", pin)
                 new_port = copy.copy(pin.port)
@@ -431,11 +461,11 @@ class Cell(CktObj):
                 new_inst.pins.addobj(new_pin)
                 #print("adding new pin:", new_pin)
 
-        self.instances.delete(inst.name)
+        self.del_instance(inst.name)
 
     def flatten_cell(self, max_depth=1000):
         for depth in range(max_depth):
-            hier_insts = [inst for inst in self.instances.all() if inst.ishier]
+            hier_insts = [inst for inst in self.all_instances() if inst.ishier]
             #print("depth:", depth, [i.name for i in hier_insts])
             if len(hier_insts) == 0:
                 return
@@ -476,9 +506,9 @@ class Cell(CktObj):
 
         #cache = {}
         #count = 0
-        hier_insts = [inst for inst in self.instances.all() if inst.ishier]
+        hier_insts = [inst for inst in self.all_instances() if inst.ishier]
         for inst in hier_insts:
-        #for inst in self.instances.all():
+        #for inst in self.all_instances():
             #count += 1
             #if count % 10 == 0:
             #print("Resolving refs... inst: %s/%s" % (self.full_name(),

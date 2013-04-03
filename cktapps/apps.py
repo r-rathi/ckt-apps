@@ -8,7 +8,7 @@ def report_net(cell):
     for net in cell.nets.all():
         net_info[net.name] = dict(drivers=[], loads=[], caps=[])
 
-    for inst in cell.instances.all():
+    for inst in cell.all_instances():
         for pin in inst.pins.all():
             if pin.port.name in ('s', 'd'):
                 net_info[pin.net.name]['drivers'].append(pin.instance)
@@ -78,7 +78,7 @@ def report_hierarchy(cell):
     _print_cell_hierarchy(cell, 0) 
 
 def _print_cell_hierarchy(cell, indent):
-    for inst in cell.instances.all():
+    for inst in cell.all_instances():
         print("%s|-- %s (%s)" % (' ' * 4  * indent, inst.name, inst.cellname))
         if inst.ishier:
             _print_cell_hierarchy(inst.cell, indent + 1)

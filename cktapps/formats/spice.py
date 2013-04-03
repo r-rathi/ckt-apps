@@ -262,7 +262,7 @@ class Reader(object):
         cellname = 'c'
         params['c'] = args[-1]
 
-        inst = self._current_cell.instances.add(instname, cellname, params=params)
+        inst = self._current_cell.add_instance(instname, cellname, params=params)
 
         portnames = ['p', 'n']
 
@@ -281,7 +281,7 @@ class Reader(object):
         if instname[0].lower() == "x":
             instname = instname[1:]
 
-        inst = self._current_cell.instances.add(instname, cellname, params=params)
+        inst = self._current_cell.add_instance(instname, cellname, params=params)
 
         portnames = ['d', 'g', 's', 'b']
 
@@ -301,7 +301,7 @@ class Reader(object):
             self._process_m(pstmt)
             return
 
-        inst = self._current_cell.instances.add(instname, cellname, params=params)
+        inst = self._current_cell.add_instance(instname, cellname, params=params)
         inst.ishier = True
 
         for netname in netnames:
@@ -351,7 +351,7 @@ class Reader(object):
 
     def x_add_instance(self, *args, **kwargs):
         parent_cell = self._current_cell
-        return parent_cell.instances.add(*args, **kwargs)
+        return parent_cell.add_instance(*args, **kwargs)
 
     def x_add_pin(self, *args, **kwargs):
         parent_cell = self._current_cell
@@ -417,7 +417,7 @@ class Writer(object):
         self.emitln(' '.join(portnames))
 
     def emit_instances(self):
-        for inst in self.cell.instances.all():
+        for inst in self.cell.all_instances():
             self.emit_instance(inst)
 
     def emit_instance(self, inst):
