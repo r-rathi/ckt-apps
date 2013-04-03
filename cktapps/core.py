@@ -256,7 +256,7 @@ class Instance(CktObj):
         return p
 
     def bind(self, cell):
-        cell_portnames = [port.name for port in cell.ports.all()]
+        cell_portnames = [port.name for port in cell.all_ports()]
 
         if (len(cell_portnames) == len(self.pins)):
             for pin, portname in zip(self.pins, cell_portnames):
@@ -330,7 +330,7 @@ class Cell(CktObj):
 
         self.cells = collections.OrderedDict()
         self.prims = collections.OrderedDict()
-        self.ports = CktObjContainer(objtype=Port, owner=self)
+        self.ports = collections.OrderedDict()
         self.nets = collections.OrderedDict()
         self.instances = collections.OrderedDict()
 
@@ -422,8 +422,19 @@ class Cell(CktObj):
         except KeyError:
             raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
+    def add_port(self, name, *args, **kwargs):
+        if name is None:
+            raise CktObjValueError("port has no name")
+        port = Port(name, *args, **kwargs)
+        port.owner = self
+        self.ports[name] = port
+        return port
+
+    def all_ports(self):
+        return self.ports.itervalues()
+
     def bind_inst2cell(self, inst, cell):
-        cell_portnames = [port.name for port in cell.ports.all()]
+        cell_portnames = [port.name for port in cell.all_ports()]
         inst_pins = [pin for pin in self.find_pin() if pin.instance == inst]
 
         if (len(cell_portnames) == len(inst_pins)):
@@ -452,7 +463,7 @@ class Cell(CktObj):
     def flatten_instance(self, inst):
         inst_netnames = [pin.net.name for pin in inst.pins.all()]
         #TODO: check whether refs resolved or not
-        cell_portnames = [port.name for port in inst.cell.ports.all()]
+        cell_portnames = [port.name for port in inst.cell.all_ports()]
         port2net_map = {}
         for portname, netname in zip(cell_portnames, inst_netnames):
             port2net_map[portname] = netname

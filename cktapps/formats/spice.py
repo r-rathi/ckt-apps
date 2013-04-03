@@ -224,7 +224,7 @@ class Reader(object):
         self._push_cell_scope(cell)
 
         for portname in portnames:
-            self._current_cell.ports.add(portname)
+            self._current_cell.add_port(portname)
             self._current_cell.add_net(portname)
 
     def _process_ends(self, pstmt):
@@ -343,7 +343,7 @@ class Reader(object):
 
     def x_add_port(self, *args, **kwargs):
         parent_cell = self._current_cell
-        return parent_cell.ports.add(*args, **kwargs)
+        return parent_cell.add_port(*args, **kwargs)
 
     def x_add_net(self, *args, **kwargs):
         parent_cell = self._current_cell
@@ -413,7 +413,7 @@ class Writer(object):
         self.emitln(self.cell.name)
 
     def emit_ports(self):
-        portnames = [port.name for port in self.cell.ports.all()]
+        portnames = [port.name for port in self.cell.all_ports()]
         self.emitln(' '.join(portnames))
 
     def emit_instances(self):
