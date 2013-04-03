@@ -328,7 +328,8 @@ class Cell(CktObj):
         else:
             self.params = params
 
-        self.cells = CktObjContainer(objtype=Cell, owner=self)
+        self.cells = collections.OrderedDict()
+        #self.cells = CktObjContainer(objtype=Cell, owner=self)
         self.prims = CktObjContainer(objtype=Prim, owner=self)
         self.ports = CktObjContainer(objtype=Port, owner=self)
         self.nets = CktObjContainer(objtype=Net, owner=self)
@@ -347,6 +348,23 @@ class Cell(CktObj):
     #def find(self, objtype, objname=None):
     #    if objname:
     #        return 
+
+    def add_cell(self, name, *args, **kwargs):
+        if name is None:
+            raise CktObjValueError("cell has no name")
+        cell = Cell(name, *args, **kwargs)
+        cell.owner = self
+        self.cells[name] = cell
+        return cell
+
+    def all_cells(self):
+        return self.cells.itervalues()
+
+    def get_cell(self, name):
+        try:
+            return self.cells[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
     def bind_inst2cell(self, inst, cell):
         cell_portnames = [port.name for port in cell.ports.all()]
@@ -430,8 +448,9 @@ class Cell(CktObj):
         search_path.reverse()
         for cell in search_path:
             try:
-                return cell.cells.get(cellname)
-            except CktObjDoesNotExist:
+                return cell.cells[cellname]
+            #except CktObjDoesNotExist:
+            except KeyError:
                 continue
         raise CktObjDoesNotExist(cellname)
 
@@ -452,7 +471,7 @@ class Cell(CktObj):
         pass
 
     def resolve_refs(self): # link_design link_cell link_ckt
-        for cell in self.cells.all():
+        for cell in self.all_cells():
             cell.resolve_refs()
 
         #cache = {}
@@ -472,7 +491,7 @@ class Cell(CktObj):
                     cell = self.search_scope(inst.cellname)
                     #cache[inst.cellname] = cell
                 except KeyError:
-                    raise LinkingError("failed to to resolve ref '%s' of '%s' in cell '%s'" %
+                    raise LinkingError("failed to resolve ref '%s' of '%s' in cell '%s'" %
                                        (inst.cellname, inst.name, self.full_name()))
 
             #self.bind_inst2cell(inst, cell)
@@ -482,25 +501,27 @@ class Cell(CktObj):
 
             cell._ref_count += 1
 
-
     def __repr__(self):
-        lev = len(self.scope_path)
-        indent = " " * 4
+        return "<Cell(name=%s)>" % self.name
 
-        r  = "%s(%s) {\n" % (self.__class__.__name__, self.full_name())
-        for port in self.ports.values():
-            r += indent*(lev+1) + str(port) + "\n"
-        r += indent*(lev+1) + "Params(" + str(self.params) + ")\n"
-        for net in self.nets.values():
-            r += indent*(lev+1) + str(net) + "\n"
-        for instance in self.instances.values():
-            r += indent*(lev+1) + str(instance) + "\n"
-        for pin in self.find_pin():
-            r += indent*(lev+1) + str(pin) + "\n"
-        for cell in self.cells.values():
-            r += indent*(lev+1) + str(cell) + "\n"
-        r += indent*lev + "}"
-        return r
+    #def __repr__(self):
+    #    lev = len(self.scope_path)
+    #    indent = " " * 4
+
+    #    r  = "%s(%s) {\n" % (self.__class__.__name__, self.full_name())
+    #    for port in self.ports.values():
+    #        r += indent*(lev+1) + str(port) + "\n"
+    #    r += indent*(lev+1) + "Params(" + str(self.params) + ")\n"
+    #    for net in self.nets.values():
+    #        r += indent*(lev+1) + str(net) + "\n"
+    #    for instance in self.instances.values():
+    #        r += indent*(lev+1) + str(instance) + "\n"
+    #    for pin in self.find_pin():
+    #        r += indent*(lev+1) + str(pin) + "\n"
+    #    for cell in self.cells.values():
+    #        r += indent*(lev+1) + str(cell) + "\n"
+    #    r += indent*lev + "}"
+    #    return r
 
 #-------------------------------------------------------------------------------
 class Prim(Cell):

@@ -217,7 +217,7 @@ class Reader(object):
         portnames = args[2:]
 
         #cell = self._current_cell.add_cell(cellname, params=params)
-        cell = self._current_cell.cells.add(cellname, params=params)
+        cell = self._current_cell.add_cell(cellname, params=params)
 
         cell.scope_path = self._current_cell.scope_path + [self._current_cell]
 
