@@ -269,6 +269,7 @@ class Reader(object):
         params['c'] = args[-1]
 
         inst = self.current_scope.add_instance(instname, cellname, params=params)
+        inst.is_linked = True
 
         portnames = ['p', 'n']
 
@@ -308,7 +309,7 @@ class Reader(object):
             return
 
         inst = self.current_scope.add_instance(instname, cellname, params=params)
-        inst.ishier = True
+        inst.is_hierarchical = True
 
         for netname in netnames:
             net = self.current_scope.add_net(netname)

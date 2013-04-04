@@ -174,7 +174,6 @@ class Instance(object):
 
         self.refname = refname
         self.ref = None
-        self.ishier = False
         self.owner = None
 
         self.pins = []
@@ -183,6 +182,9 @@ class Instance(object):
             self.params = {}
         else:
             self.params = params
+
+        self.is_hierarchical = False
+        self.is_linked = False
 
         self._eval_params = None
 
@@ -266,8 +268,10 @@ class Instance(object):
 
     #---------------------------------------------------------------------------
     def link(self):
+        if self.is_linked: return
         self.resolve_ref()
         self.bind()
+        self.is_linked = True
 
     def resolve_ref(self):
         if self.ref: return
@@ -285,8 +289,8 @@ class Instance(object):
                     (self.refname, self.name, self.owner.full_name()))
         #print("=> cell/prim:", ref.full_name())
 
-        self.ref = ref
         ref._ref_count += 1
+        self.ref = ref
 
     def bind(self): pass
 
@@ -542,7 +546,7 @@ class Cell(object):
 
     def flatten_cell(self, max_depth=1000):
         for depth in range(max_depth):
-            hier_insts = [inst for inst in self.all_instances() if inst.ishier]
+            hier_insts = [inst for inst in self.all_instances() if inst.is_hierarchical]
             #print("depth:", depth, [i.name for i in hier_insts])
             if len(hier_insts) == 0:
                 return
