@@ -80,9 +80,46 @@ class ParserError(Exception): pass
 class Reader(object):
     def __init__(self, ckt):
         self.ckt = ckt
-        self._cell_stack = [ckt]
-        self._current_cell = ckt
+        self._scope_stack = []
+        self.current_scope = ckt
                         
+    def push_scope(self, scope):
+        self._scope_stack.append(self.current_scope)
+        self.current_scope = scope
+
+    def pop_scope(self):
+        prev_scope = self.current_scope
+        self.current_scope = self._scope_stack.pop()
+        return prev_scope
+
+    #---------------------------------------------------------------------------
+    def read(self, f):
+        for (line, fname, lineno) in self.read_line(f):
+            try:
+                tokens = self._tokenize(line)
+                pstmt = self._parse(tokens)
+
+            except SyntaxError, e:
+                raise SyntaxError("%s [%s, %s]\n-> %s" %
+                                  (e.args[0], fname, lineno, line))
+
+            if pstmt is None: continue
+
+            major, minor = pstmt['type']
+
+            # Skip comments for now
+            if major == 'comment': continue
+
+            try:
+                self._process_stmt[major][minor](self, pstmt)
+            except KeyError:
+                raise ParserError(
+                    "unrecognized type '%s/%s' [%s, %s]\n-> %s" %
+                    (major, minor, fname, lineno, line))
+            except SyntaxError, e:
+                raise SyntaxError("%s [%s, %s]\n-> %s" %
+                                  (e.args[0], fname, lineno, line))
+
     @classmethod
     def read_line(cls, f):
         """
@@ -181,33 +218,6 @@ class Reader(object):
 
         return dict(type=type, args=args, kwargs=kwargs, comment=comment)
 
-    def read(self, f):
-        for (line, fname, lineno) in self.read_line(f):
-            try:
-                tokens = self._tokenize(line)
-                pstmt = self._parse(tokens)
-
-            except SyntaxError, e:
-                raise SyntaxError("%s [%s, %s]\n-> %s" %
-                                  (e.args[0], fname, lineno, line))
-
-            if pstmt is None: continue
-
-            major, minor = pstmt['type']
-
-            # Skip comments for now
-            if major == 'comment': continue
-
-            try:
-                self._process_stmt[major][minor](self, pstmt)
-            except KeyError:
-                raise ParserError(
-                    "unrecognized type '%s/%s' [%s, %s]\n-> %s" %
-                    (major, minor, fname, lineno, line))
-            except SyntaxError, e:
-                raise SyntaxError("%s [%s, %s]\n-> %s" %
-                                  (e.args[0], fname, lineno, line))
-
     #---------------------------------------------------------------------------
     def _process_subckt(self, pstmt):
         args = pstmt['args']
@@ -216,17 +226,16 @@ class Reader(object):
         cellname = args[1]
         portnames = args[2:]
 
-        #cell = self._current_cell.add_cell(cellname, params=params)
-        cell = self._current_cell.add_cell(cellname, params=params)
-        self._push_cell_scope(cell)
+        cell = self.current_scope.add_cell(cellname, params=params)
+        self.push_scope(cell)
 
         for portname in portnames:
-            self._current_cell.add_port(portname)
-            self._current_cell.add_net(portname)
+            self.current_scope.add_port(portname)
+            self.current_scope.add_net(portname)
 
     def _process_ends(self, pstmt):
         try:
-            self._pop_cell_scope()
+            self.pop_scope()
         except IndexError:
             raise SyntaxError("keyword '.ends' unexpected here: %s, %s\n-> %s" %
                                    (filename, lineno, orig_line))
@@ -242,7 +251,7 @@ class Reader(object):
 
         portnames = args[3:]
 
-        self._current_cell.add_prim(name, type, portnames, params)
+        self.current_scope.add_prim(name, type, portnames, params)
 
     def _process_param(self, pstmt):
         pass
@@ -259,12 +268,12 @@ class Reader(object):
         cellname = 'c'
         params['c'] = args[-1]
 
-        inst = self._current_cell.add_instance(instname, cellname, params=params)
+        inst = self.current_scope.add_instance(instname, cellname, params=params)
 
         portnames = ['p', 'n']
 
         for netname, portname in zip(netnames, portnames):
-            net = self._current_cell.add_net(netname)
+            net = self.current_scope.add_net(netname)
             inst.add_pin(portname, net)
 
     def _process_m(self, pstmt):
@@ -278,12 +287,12 @@ class Reader(object):
         if instname[0].lower() == "x":
             instname = instname[1:]
 
-        inst = self._current_cell.add_instance(instname, cellname, params=params)
+        inst = self.current_scope.add_instance(instname, cellname, params=params)
 
         portnames = ['d', 'g', 's', 'b']
 
         for netname, portname in zip(netnames, portnames):
-            net = self._current_cell.add_net(netname)
+            net = self.current_scope.add_net(netname)
             inst.add_pin(portname, net)
 
     def _process_x(self, pstmt):
@@ -298,11 +307,11 @@ class Reader(object):
             self._process_m(pstmt)
             return
 
-        inst = self._current_cell.add_instance(instname, cellname, params=params)
+        inst = self.current_scope.add_instance(instname, cellname, params=params)
         inst.ishier = True
 
         for netname in netnames:
-            net = self._current_cell.add_net(netname)
+            net = self.current_scope.add_net(netname)
             inst.add_pin(None, net)
 
     _process_stmt = {'control' : {'subckt'        : _process_subckt,
@@ -318,40 +327,30 @@ class Reader(object):
                     }
 
     #---------------------------------------------------------------------------
-    def _push_cell_scope(self, cell):
-        self._cell_stack.append(self._current_cell)
-        self._current_cell = cell
-
-    def _pop_cell_scope(self):
-        prev_cell = self._current_cell
-        self._current_cell = self._cell_stack.pop()
-        return prev_cell
-
-    #---------------------------------------------------------------------------
     def x_add_macromodel(self, name, type, params):
         self.ckt.macromodels[name] = type
         return name
 
     def x_add_cell(self, *args, **kwargs):
-        parent_cell = self._current_cell
+        parent_cell = self.current_scope
         cell = parent_cell.add_cell(*args, **kwargs)
         cell.scope_path = parent_cell.scope_path + [parent_cell]
         return cell
 
     def x_add_port(self, *args, **kwargs):
-        parent_cell = self._current_cell
+        parent_cell = self.current_scope
         return parent_cell.add_port(*args, **kwargs)
 
     def x_add_net(self, *args, **kwargs):
-        parent_cell = self._current_cell
+        parent_cell = self.current_scope
         return parent_cell.add_net(*args, **kwargs)
 
     def x_add_instance(self, *args, **kwargs):
-        parent_cell = self._current_cell
+        parent_cell = self.current_scope
         return parent_cell.add_instance(*args, **kwargs)
 
     def x_add_pin(self, *args, **kwargs):
-        parent_cell = self._current_cell
+        parent_cell = self.current_scope
         return parent_cell.add_pin(*args, **kwargs)
 
 #-------------------------------------------------------------------------------
