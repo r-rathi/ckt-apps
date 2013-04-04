@@ -419,6 +419,12 @@ class Cell(object):
     def all_prims(self):
         return self.prims.itervalues()
 
+    def get_prim(self, name):
+        try:
+            return self.prims[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
     #---------------------------------------------------------------------------
     def add_instance(self, name, *args, **kwargs):
         if name is None:

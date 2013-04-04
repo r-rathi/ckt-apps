@@ -271,7 +271,7 @@ class TestSpiceMacromodel:
     def test_simple(self):
         f = StringIO(
             """
-.macromodel nch_mac nmos w=1 l=1
+.macromodel nch_mac nmos d g s b w=1 l=1
 + cg="w * l * 0.05" $ gate cap (F)
             """)
         f.name = "<string>"
@@ -281,6 +281,7 @@ class TestSpiceMacromodel:
 
         assert ckt.prims.get('nch_mac').name == 'nch_mac'
         assert ckt.prims.get('nch_mac').type == 'nmos'
+        assert ckt.prims.get('nch_mac').portnames == ['d', 'g', 's', 'b']
 
 class TestCktObj:
     def test_name(self):
