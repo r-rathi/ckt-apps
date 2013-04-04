@@ -40,7 +40,7 @@ def main(args=None):
     for spice_file in arg_ns.spice_files:
         ckt.read_spice(spice_file)
 
-    ckt.resolve_refs()
+    ckt.link()
 
     if arg_ns.cell:
         cell = ckt.get_cell(arg_ns.cell)

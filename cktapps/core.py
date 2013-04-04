@@ -265,7 +265,32 @@ class Instance(object):
         return p
 
     #---------------------------------------------------------------------------
-    def bind(self, cell):
+    def link(self):
+        self.resolve_ref()
+        self.bind()
+
+    def resolve_ref(self):
+        if self.ref: return
+
+        #print("Resolving ref... inst: %s/%s" %
+              #(self.owner.full_name(), self.name), end=' ')
+        try:
+            ref = self.owner.search_scope_prim(self.refname)
+        except CktObjDoesNotExist:
+            try:
+                ref = self.owner.search_scope_cell(self.refname)
+            except:
+                raise LinkingError(
+                    "failed to resolve ref '%s' of '%s' in cell '%s'" %
+                    (self.refname, self.name, self.owner.full_name()))
+        #print("=> cell/prim:", ref.full_name())
+
+        self.ref = ref
+        ref._ref_count += 1
+
+    def bind(self): pass
+
+    def xbind(self, cell):
         cell_portnames = [port.name for port in cell.all_ports()]
 
         if (len(cell_portnames) == len(self.pins)):
@@ -451,33 +476,6 @@ class Cell(object):
         return self.ports.itervalues()
 
     #---------------------------------------------------------------------------
-    def bind_inst2cell(self, inst, cell):
-        cell_portnames = [port.name for port in cell.all_ports()]
-        inst_pins = [pin for pin in self.find_pin() if pin.instance == inst]
-
-        if (len(cell_portnames) == len(inst_pins)):
-            for pin, portname in zip(inst_pins, cell_portnames):
-                pin.port.name = portname
-        else:
-            raise LinkingError("port count mismatch\ncell %s : %s\ninst %s : %s" %
-                               (cell.full_name(), cell_portnames,
-                                self.full_name() + "/" + inst.name,
-                                [pin.net.name for pin in inst_pins]))
-
-        for param in inst.params.keys():
-            if param == "m":
-                continue
-            try:
-                p = cell.params[param]
-            except KeyError:
-                msg = "extra parameter '%s' in instance '%s' of '%s'"
-                raise LinkingError(msg % (param,
-                                          self.full_name() + "/" + inst.name,
-                                          cell.full_name() ))
-
-        inst.ref = cell
-
-
     def search_scope_cell(self, name):
         scope = self
         while scope:
@@ -494,41 +492,12 @@ class Cell(object):
             scope = scope.owner
         raise CktObjDoesNotExist(name)
 
+    #---------------------------------------------------------------------------
     def link(self):
-        #resolve_references
-        #bind
-        pass
-
-    def resolve_refs(self): # link_design link_cell link_ckt
         for cell in self.all_cells():
-            cell.resolve_refs()
-
-        #cache = {}
-        #count = 0
-        hier_insts = [inst for inst in self.all_instances() if inst.ishier]
-        for inst in hier_insts:
-        #for inst in self.all_instances():
-            #count += 1
-            #if count % 10 == 0:
-            #print("Resolving refs... inst: %s/%s" % (self.full_name(),
-            #                                          inst.name), end='')
-            if inst.ref is None:
-                #try:
-                #    cell = cache[inst.refname]
-                #except KeyError:
-                try:
-                    cell = self.search_scope_cell(inst.refname)
-                    #cache[inst.refname] = cell
-                except CktObjDoesNotExist:
-                    raise LinkingError("failed to resolve ref '%s' of '%s' in cell '%s'" %
-                                       (inst.refname, inst.name, self.full_name()))
-
-            #self.bind_inst2cell(inst, cell)
-            inst.ref = cell
-            #if count % 10 == 0:
-            #print("=> cell:", inst.ref.full_name())
-
-            cell._ref_count += 1
+            cell.link()
+        for inst in self.all_instances():
+            inst.link()
 
     #---------------------------------------------------------------------------
     def flatten_instance(self, inst):

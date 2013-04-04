@@ -40,7 +40,7 @@ def main(args=None):
     for spice_file in arg_ns.spice_files:
         ckt.read_spice(spice_file)
 
-    ckt.resolve_refs()
+    ckt.link()
 
     #topcellnames = [cell.name for cell in ckt.get_topcells()]
     #print "Top cells: %s" % topcellnames
