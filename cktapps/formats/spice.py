@@ -290,8 +290,12 @@ class Reader(object):
 
         inst = self.current_scope.add_instance(instname, cellname, params=params)
 
-        #portnames = ['d', 'g', 's', 'b']
-        portnames = self.ckt.get_prim(cellname).portnames
+        prim = self.ckt.get_prim(cellname)
+
+        inst.ref = prim
+        inst.is_linked = True
+
+        portnames = prim.portnames
 
         for netname, portname in zip(netnames, portnames):
             net = self.current_scope.add_net(netname)
