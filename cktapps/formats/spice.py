@@ -218,9 +218,6 @@ class Reader(object):
 
         #cell = self._current_cell.add_cell(cellname, params=params)
         cell = self._current_cell.add_cell(cellname, params=params)
-
-        cell.scope_path = self._current_cell.scope_path + [self._current_cell]
-
         self._push_cell_scope(cell)
 
         for portname in portnames:

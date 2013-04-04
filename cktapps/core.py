@@ -342,12 +342,16 @@ class Cell(object):
         self.nets = collections.OrderedDict()
         self.instances = collections.OrderedDict()
 
-        self.scope_path = []
+        self.owner = None
         self._ref_count = 0
 
     def full_name(self):
-        scope_path = "/".join([cell.name for cell in self.scope_path])
-        return scope_path + "/" + self.name
+        scope = self
+        scope_path = collections.deque()
+        while scope:
+            scope_path.appendleft(scope.name)
+            scope = scope.owner
+        return "/".join(scope_path)
 
     #def add(self, objtype, obj):
     #    self.objects[objtype][obj.name.lower()] = obj
@@ -474,28 +478,21 @@ class Cell(object):
         inst.ref = cell
 
 
-    def search_scope(self, cellname):
-        search_path = self.scope_path[:]
-        search_path.append(self)
-        search_path.reverse()
-        for cell in search_path:
-            try:
-                return cell.cells[cellname]
-            #except CktObjDoesNotExist:
-            except KeyError:
-                continue
-        raise CktObjDoesNotExist(cellname)
+    def search_scope_cell(self, name):
+        scope = self
+        while scope:
+            cell = scope.cells.get(name)
+            if cell: return cell
+            scope = scope.owner
+        raise CktObjDoesNotExist(name)
 
-    def search_scope_prim(self, primname):
-        search_path = self.scope_path[:]
-        search_path.append(self)
-        search_path.reverse()
-        for cell in search_path:
-            try:
-                return cell.prims[primname]
-            except KeyError:
-                continue
-        raise CktObjDoesNotExist(primname)
+    def search_scope_prim(self, name):
+        scope = self
+        while scope:
+            prim = scope.prims.get(name)
+            if prim: return prim
+            scope = scope.owner
+        raise CktObjDoesNotExist(name)
 
     def link(self):
         #resolve_references
@@ -520,9 +517,9 @@ class Cell(object):
                 #    cell = cache[inst.refname]
                 #except KeyError:
                 try:
-                    cell = self.search_scope(inst.refname)
+                    cell = self.search_scope_cell(inst.refname)
                     #cache[inst.refname] = cell
-                except KeyError:
+                except CktObjDoesNotExist:
                     raise LinkingError("failed to resolve ref '%s' of '%s' in cell '%s'" %
                                        (inst.refname, inst.name, self.full_name()))
 
@@ -620,7 +617,7 @@ class Ckt(Cell):
     spice format or $root in verilog.
     """
 
-    def __init__(self, name="", params=None):
+    def __init__(self, name="$root", params=None):
         super(Ckt, self).__init__(name, params)
         self._reader_cache = {}
 
