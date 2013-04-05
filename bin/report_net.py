@@ -57,7 +57,7 @@ def main(args=None):
     ckt.write_spice(cell)
 
     print "-"*80
-    cell.flatten_cell()
+    cell.ungroup(flatten=True)
     #print cell
     ckt.write_spice(cell)
 

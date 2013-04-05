@@ -14,7 +14,7 @@ from cktapps.formats import spice
 
 #-------------------------------------------------------------------------------
 class InternalError(Exception): pass
-class LinkingError(Exception): pass
+class LinkError(Exception): pass
 class FileFormatError(Exception): pass
 class CktObjTypeError(Exception): pass
 class CktObjValueError(Exception): pass
@@ -284,7 +284,7 @@ class Instance(object):
             try:
                 ref = self.owner.search_scope_cell(self.refname)
             except:
-                raise LinkingError(
+                raise LinkError(
                     "failed to resolve ref '%s' of '%s' in cell '%s'" %
                     (self.refname, self.name, self.owner.full_name()))
         #print("=> cell/prim:", ref.full_name())
@@ -301,7 +301,7 @@ class Instance(object):
             for pin, portname in zip(self.pins, cell_portnames):
                 pin.port.name = portname
         else:
-            raise LinkingError("port count mismatch\ncell %s : %s\ninst %s : %s" %
+            raise LinkError("port count mismatch\ncell %s : %s\ninst %s : %s" %
                                (cell.full_name(), cell_portnames,
                                 self.full_name() + "/" + inst.name,
                                 [pin.net.name for pin in inst_pins]))
@@ -313,21 +313,70 @@ class Instance(object):
                 p = cell.params[param]
             except KeyError:
                 msg = "extra parameter '%s' in instance '%s' of '%s'"
-                raise LinkingError(msg % (param,
+                raise LinkError(msg % (param,
                                           self.full_name() + "/" + inst.name,
                                           cell.full_name() ))
 
         inst.ref = cell
 
 
+    def ungroup(self, flatten=False):
+        if not self.is_hierarchical: return
+        #print("ungrouping %r" % self)
+
+        if not self.is_linked:
+            raise(LinkError("can't ungroup %r before it's linked" % self))
+        assert self.ref is not None
+
+        if flatten:
+            #TODO: maybe we should copy ref before ungroup(flatten)
+            self.ref.ungroup(flatten=True)
+
+        inst_netnames = [pin.net.name for pin in self.all_pins()]
+        cell_portnames = [port.name for port in self.ref.all_ports()]
+        port2net_map = {}
+        for portname, netname in zip(cell_portnames, inst_netnames):
+            port2net_map[portname] = netname
+
+        netname_map = {}
+        for net in self.ref.all_nets():
+            old_netname = net.name
+            if old_netname in port2net_map:
+                new_netname = port2net_map[old_netname]
+            else:
+                new_netname = self.name + "/" + old_netname
+            netname_map[old_netname] = new_netname
+            self.owner.add_net(new_netname)
+            #print("adding", new_netname)
+
+        #print("netname_map:", netname_map)
+
+        for sub_inst in self.ref.all_instances():
+            new_inst = copy.copy(sub_inst)
+            new_inst.name = self.name + "/" + new_inst.name
+            new_inst.pins = [] #FIXME: api
+            #print("\nadding", new_inst)
+            #self.add_instance(new_inst)
+            #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
+            self.owner.add_instance_obj(new_inst)
+            for pin in sub_inst.all_pins():
+                #print("\nprocessing pin:", pin)
+                new_port = copy.copy(pin.port)
+                #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
+                new_net  = self.owner.get_net(netname_map[pin.net.name])
+                new_pin  = Pin(new_port, new_inst, new_net)
+                new_inst.add_pinobj(new_pin)
+                #print("adding new pin:", new_pin)
+
+        self.owner.del_instance(self.name)
+
     #---------------------------------------------------------------------------
     def __repr__(self):
-        if self.cell:
-            ref_cellname = self.cell.full_name()
+        if self.is_linked and self.ref:
+            refname = self.ref.full_name()
         else:
-            ref_cellname = "<unresolved>"
-        return "%s(%s, %s => %s)" % (self.__class__.__name__, self.name, \
-                                     self.cellname, ref_cellname)
+            refname = self.refname
+        return "Instance(%s, %s)" % (self.name, refname)
 
 class Pin(object):
     def __init__(self, port, instance, net):
@@ -510,58 +559,20 @@ class Cell(object):
             inst.link()
 
     #---------------------------------------------------------------------------
-    def flatten_instance(self, inst):
-        inst_netnames = [pin.net.name for pin in inst.all_pins()]
-        #TODO: check whether refs resolved or not
-        cell_portnames = [port.name for port in inst.ref.all_ports()]
-        port2net_map = {}
-        for portname, netname in zip(cell_portnames, inst_netnames):
-            port2net_map[portname] = netname
-
-        netname_map = {}
-        for net in inst.ref.all_nets():
-            old_netname = net.name
-            if old_netname in port2net_map:
-                new_netname = port2net_map[old_netname]
-            else:
-                new_netname = inst.name + "/" + old_netname
-            netname_map[old_netname] = new_netname
-            self.add_net(new_netname)
-            #print("adding", new_netname)
-
-        #print("netname_map:", netname_map)
-
-        for sub_inst in inst.ref.all_instances():
-            new_inst = copy.copy(sub_inst)
-            new_inst.name = inst.name + "/" + new_inst.name
-            new_inst.pins = [] #FIXME: api
-            #print("\nadding", new_inst)
-            #self.add_instance(new_inst)
-            #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
-            self.add_instance_obj(new_inst)
-            for pin in sub_inst.all_pins():
-                #print("\nprocessing pin:", pin)
-                new_port = copy.copy(pin.port)
-                #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
-                new_net  = self.nets.get(netname_map[pin.net.name])
-                new_pin  = Pin(new_port, new_inst, new_net)
-                new_inst.add_pinobj(new_pin)
-                #print("adding new pin:", new_pin)
-
-        self.del_instance(inst.name)
-
-    def flatten_cell(self, max_depth=1000):
-        for depth in range(max_depth):
-            hier_insts = [inst for inst in self.all_instances() if inst.is_hierarchical]
-            #print("depth:", depth, [i.name for i in hier_insts])
-            if len(hier_insts) == 0:
-                return
-            for inst in hier_insts:
-                self.flatten_instance(inst)
+    def ungroup(self, instname=None, flatten=False):
+        #print("ungrouping %r" % self)
+        if instname:
+            inst = self.get_instance(instname)
+            inst.ungroup(flatten)
+        else:
+            # not using self.all_instances() here becase ungroup modifies the
+            # self.instances dict
+            for inst in list(self.all_instances()):
+                inst.ungroup(flatten)
 
     #---------------------------------------------------------------------------
     def __repr__(self):
-        return "<Cell(name=%s)>" % self.name
+        return "Cell(%s)" % self.name
 
     #def __repr__(self):
     #    lev = len(self.scope_path)
