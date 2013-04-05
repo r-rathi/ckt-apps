@@ -163,10 +163,14 @@ class PinContainer(CktObjList):
 class Port(object):
     def __init__(self, name):
         self.name = name
+    def __repr__(self):
+        return "Port(%s)" % self.name
 
 class Net(object):
     def __init__(self, name):
         self.name = name
+    def __repr__(self):
+        return "Net(%s)" % self.name
 
 class Instance(object):
     def __init__(self, name, refname, params):
@@ -269,11 +273,11 @@ class Instance(object):
     #---------------------------------------------------------------------------
     def link(self):
         if self.is_linked: return
-        self.resolve_ref()
-        self.bind()
+        self._resolve_ref()
+        self._bind()
         self.is_linked = True
 
-    def resolve_ref(self):
+    def _resolve_ref(self):
         if self.ref: return
 
         #print("Resolving ref... inst: %s/%s" %
@@ -292,34 +296,26 @@ class Instance(object):
         ref._ref_count += 1
         self.ref = ref
 
-    def bind(self): pass
 
-    def xbind(self, cell):
-        cell_portnames = [port.name for port in cell.all_ports()]
+    def _bind(self):
+        assert self.ref is not None
 
-        if (len(cell_portnames) == len(self.pins)):
-            for pin, portname in zip(self.pins, cell_portnames):
-                pin.port.name = portname
-        else:
-            raise LinkError("port count mismatch\ncell %s : %s\ninst %s : %s" %
-                               (cell.full_name(), cell_portnames,
-                                self.full_name() + "/" + inst.name,
-                                [pin.net.name for pin in inst_pins]))
+        inst_pins = self.pins
+        ref_ports = self.ref.ports.values()
 
-        for param in inst.params.keys():
-            if param == "m":
-                continue
-            try:
-                p = cell.params[param]
-            except KeyError:
-                msg = "extra parameter '%s' in instance '%s' of '%s'"
-                raise LinkError(msg % (param,
-                                          self.full_name() + "/" + inst.name,
-                                          cell.full_name() ))
+        if len(inst_pins) != len(ref_ports):
+            raise LinkError("port count mismatch\n"
+                            "> cell %s : %s\n"
+                            "> inst %s : %s" %
+                            (self.ref.full_name(),
+                             [port.name for port in ref_ports],
+                             self.ref.full_name() + "/" + self.name,
+                             [pin.net.name for pin in inst_pins]))
 
-        inst.ref = cell
+        for pin, port in zip(inst_pins, ref_ports):
+                pin.port = port
 
-
+    #---------------------------------------------------------------------------
     def ungroup(self, flatten=False):
         if not self.is_hierarchical: return
         #print("ungrouping %r" % self)
@@ -329,14 +325,12 @@ class Instance(object):
         assert self.ref is not None
 
         if flatten:
-            #TODO: maybe we should copy ref before ungroup(flatten)
+            #TODO: maybe we should copy ref before ungroup(flatten=True)
             self.ref.ungroup(flatten=True)
 
-        inst_netnames = [pin.net.name for pin in self.all_pins()]
-        cell_portnames = [port.name for port in self.ref.all_ports()]
         port2net_map = {}
-        for portname, netname in zip(cell_portnames, inst_netnames):
-            port2net_map[portname] = netname
+        for pin in self.all_pins():
+            port2net_map[pin.port.name] = pin.net.name
 
         netname_map = {}
         for net in self.ref.all_nets():
@@ -351,17 +345,17 @@ class Instance(object):
 
         #print("netname_map:", netname_map)
 
-        for sub_inst in self.ref.all_instances():
-            new_inst = copy.copy(sub_inst)
+        for old_inst in self.ref.all_instances():
+            new_inst = copy.copy(old_inst)
             new_inst.name = self.name + "/" + new_inst.name
             new_inst.pins = [] #FIXME: api
             #print("\nadding", new_inst)
             #self.add_instance(new_inst)
             #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
             self.owner.add_instance_obj(new_inst)
-            for pin in sub_inst.all_pins():
+            for pin in old_inst.all_pins():
                 #print("\nprocessing pin:", pin)
-                new_port = copy.copy(pin.port)
+                new_port = pin.port #copy.copy(pin.port)
                 #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
                 new_net  = self.owner.get_net(netname_map[pin.net.name])
                 new_pin  = Pin(new_port, new_inst, new_net)
@@ -385,7 +379,7 @@ class Pin(object):
         self.net = net
 
     def __repr__(self):
-        return "Pin(%r, %r, %r)" % (port, self.instance, self.net)
+        return "Pin(%r, %r, %r)" % (self.port, self.instance, self.net)
 
 class Parameter(object):
     def __init__(self, name, value, namespace):
