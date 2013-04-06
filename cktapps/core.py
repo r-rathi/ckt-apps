@@ -161,14 +161,16 @@ class PinContainer(CktObjList):
 
 #-------------------------------------------------------------------------------
 class Port(object):
-    def __init__(self, name):
+    def __init__(self, name, owner):
         self.name = name
+        self.owner = owner
     def __repr__(self):
         return "Port(%s)" % self.name
 
 class Net(object):
-    def __init__(self, name):
+    def __init__(self, name, owner):
         self.name = name
+        self.owner = owner
     def __repr__(self):
         return "Net(%s)" % self.name
 
@@ -200,11 +202,12 @@ class Instance(object):
     def add_pins_by_pos(self, *netnames): pass
     def add_pins_by_name(self, **portmap): pass
     def add_pin(self, name, net):
-        port = Port(name)
-        pin = Pin(port, self, net)
+        port = Port(name, owner=None)
+        pin = Pin(port=port, instance=self, net=net)
         self.pins.append(pin)
+        return pin
 
-    def add_pinobj(self, pin):
+    def add_pin_obj(self, pin):
         if not isinstance(pin, Pin):
             raise CktObjTypeError("can't add '%r' to '%r'" % (pin, self))
         pin.instance = self
@@ -255,7 +258,7 @@ class Instance(object):
             for k, v in self.owner.params.items():
                 parent_cell_ns[k.lower()] = float(v)
 
-            #print("pns:", self, self.container, self.container.owner.name, parent_cell_ns)
+            #print("pns:", self, parent_cell_ns)
             for k, v in self.params.items():
                 v = self._destr(v.lower())
                 if isinstance(v, basestring):
@@ -316,7 +319,7 @@ class Instance(object):
                 pin.port = port
 
     #---------------------------------------------------------------------------
-    def ungroup(self, flatten=False):
+    def ungroup(self, flatten=False, prefix='', sep='/'):
         if not self.is_hierarchical: return
         #print("ungrouping %r" % self)
 
@@ -326,41 +329,25 @@ class Instance(object):
 
         if flatten:
             #TODO: maybe we should copy ref before ungroup(flatten=True)
-            self.ref.ungroup(flatten=True)
+            self.ref.ungroup(flatten=True, prefix='', sep=sep)
 
-        port2net_map = {}
+        presep = prefix + self.name + sep
+
+        pinmap = {}
         for pin in self.all_pins():
-            port2net_map[pin.port.name] = pin.net.name
+            pinmap[pin.port.name] = pin
 
-        netname_map = {}
-        for net in self.ref.all_nets():
-            old_netname = net.name
-            if old_netname in port2net_map:
-                new_netname = port2net_map[old_netname]
-            else:
-                new_netname = self.name + "/" + old_netname
-            netname_map[old_netname] = new_netname
-            self.owner.add_net(new_netname)
-            #print("adding", new_netname)
-
-        #print("netname_map:", netname_map)
-
-        for old_inst in self.ref.all_instances():
-            new_inst = copy.copy(old_inst)
-            new_inst.name = self.name + "/" + new_inst.name
-            new_inst.pins = [] #FIXME: api
-            #print("\nadding", new_inst)
-            #self.add_instance(new_inst)
-            #self.instances[new_inst.name.lower()] = new_inst #FIXME: api
+        for inst in list(self.ref.all_instances()):
+            new_inst = copy.copy(inst)
+            new_inst.name = presep + inst.name
+            new_inst.pins = []
             self.owner.add_instance_obj(new_inst)
-            for pin in old_inst.all_pins():
-                #print("\nprocessing pin:", pin)
-                new_port = pin.port #copy.copy(pin.port)
-                #print("looking up:", pin.net.name, "=>", netname_map[pin.net.name])
-                new_net  = self.owner.get_net(netname_map[pin.net.name])
-                new_pin  = Pin(new_port, new_inst, new_net)
-                new_inst.add_pinobj(new_pin)
-                #print("adding new pin:", new_pin)
+            for pin in inst.all_pins():
+                if pin.net.name in pinmap:
+                    net = pinmap[pin.net.name].net
+                else:
+                    net = self.owner.get_net_else_add(presep + pin.net.name)
+                new_inst.add_pin_obj(Pin(pin.port, new_inst, net))
 
         self.owner.del_instance(self.name)
 
@@ -400,19 +387,20 @@ class Cell(object):
     
     A cell also acts as a declaration scope, allowing nested cell defintions.
     """
-    def __init__(self, name, params=None):
+    def __init__(self, name, portnames, params):
         self.name = name
-
-        if params is None:
-            self.params = collections.OrderedDict()
-        else:
-            self.params = params
 
         self.cells = collections.OrderedDict()
         self.prims = collections.OrderedDict()
         self.ports = collections.OrderedDict()
         self.nets = collections.OrderedDict()
         self.instances = collections.OrderedDict()
+
+        for portname in portnames:
+            self.add_port(portname)
+            self.add_net(portname)
+
+        self.params = params
 
         self.owner = None
         self._ref_count = 0
@@ -425,18 +413,11 @@ class Cell(object):
             scope = scope.owner
         return "/".join(scope_path)
 
-    #def add(self, objtype, obj):
-    #    self.objects[objtype][obj.name.lower()] = obj
-
-    #def find(self, objtype, objname=None):
-    #    if objname:
-    #        return 
-
     #---------------------------------------------------------------------------
-    def add_cell(self, name, *args, **kwargs):
+    def add_cell(self, name, portnames, params=None):
         if name is None:
             raise CktObjValueError("cell has no name")
-        cell = Cell(name, *args, **kwargs)
+        cell = Cell(name, portnames, params)
         cell.owner = self
         self.cells[name] = cell
         return cell
@@ -451,10 +432,10 @@ class Cell(object):
             raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
     #---------------------------------------------------------------------------
-    def add_prim(self, name, *args, **kwargs):
+    def add_prim(self, name, type, portnames, params=None):
         if name is None:
             raise CktObjValueError("prim has no name")
-        prim = Prim(name, *args, **kwargs)
+        prim = Prim(name, type, portnames, params)
         prim.owner = self
         self.prims[name] = prim
         return prim
@@ -502,26 +483,30 @@ class Cell(object):
     def add_net(self, name, *args, **kwargs):
         if name is None:
             raise CktObjValueError("net has no name")
-        net = Net(name, *args, **kwargs)
-        net.owner = self
+        net = Net(name, owner=self)
         self.nets[name] = net
         return net
 
     def all_nets(self):
         return self.nets.itervalues()
 
-    def get_net(self, name):
+    def get_net(self, name): #, autocreate=False):
         try:
             return self.nets[name]
         except KeyError:
+            #if autocreate:
+            #    self.add_net(name)
+            #else:
             raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
+    def get_net_else_add(self, name):
+        return self.nets.setdefault(name, Net(name, owner=self))
+
     #---------------------------------------------------------------------------
-    def add_port(self, name, *args, **kwargs):
+    def add_port(self, name):
         if name is None:
             raise CktObjValueError("port has no name")
-        port = Port(name, *args, **kwargs)
-        port.owner = self
+        port = Port(name, owner=self)
         self.ports[name] = port
         return port
 
@@ -553,20 +538,20 @@ class Cell(object):
             inst.link()
 
     #---------------------------------------------------------------------------
-    def ungroup(self, instname=None, flatten=False):
+    def ungroup(self, instname=None, flatten=False, prefix='', sep='/'):
         #print("ungrouping %r" % self)
         if instname:
             inst = self.get_instance(instname)
             inst.ungroup(flatten)
         else:
-            # not using self.all_instances() here becase ungroup modifies the
-            # self.instances dict
+            # need to make a copy using list() becase inst.ungroup() modifies
+            # the self.instances dict
             for inst in list(self.all_instances()):
-                inst.ungroup(flatten)
+                inst.ungroup(flatten=flatten, prefix=prefix, sep=sep)
 
     #---------------------------------------------------------------------------
     def __repr__(self):
-        return "Cell(%s)" % self.name
+        return "Cell(%s)" % self.full_name()
 
     #def __repr__(self):
     #    lev = len(self.scope_path)
@@ -589,8 +574,8 @@ class Cell(object):
 
 #-------------------------------------------------------------------------------
 class Prim(Cell):
-    def __init__(self, name, type, portnames, params=None):
-        super(Prim, self).__init__(name, params)
+    def __init__(self, name, type, portnames, params):
+        super(Prim, self).__init__(name, portnames, params)
         self.type = type
         self.portnames = portnames
 
@@ -601,8 +586,8 @@ class Ckt(Cell):
     spice format or $root in verilog.
     """
 
-    def __init__(self, name="$root", params=None):
-        super(Ckt, self).__init__(name, params)
+    def __init__(self, name="", params=None):
+        super(Ckt, self).__init__(name, portnames=[], params=params)
         self._reader_cache = {}
 
     def get_topcells(self):

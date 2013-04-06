@@ -226,12 +226,8 @@ class Reader(object):
         cellname = args[1]
         portnames = args[2:]
 
-        cell = self.current_scope.add_cell(cellname, params=params)
+        cell = self.current_scope.add_cell(cellname, portnames, params)
         self.push_scope(cell)
-
-        for portname in portnames:
-            self.current_scope.add_port(portname)
-            self.current_scope.add_net(portname)
 
     def _process_ends(self, pstmt):
         try:
@@ -331,33 +327,6 @@ class Reader(object):
                                   'x' : _process_x
                                  }
                     }
-
-    #---------------------------------------------------------------------------
-    def x_add_macromodel(self, name, type, params):
-        self.ckt.macromodels[name] = type
-        return name
-
-    def x_add_cell(self, *args, **kwargs):
-        parent_cell = self.current_scope
-        cell = parent_cell.add_cell(*args, **kwargs)
-        cell.scope_path = parent_cell.scope_path + [parent_cell]
-        return cell
-
-    def x_add_port(self, *args, **kwargs):
-        parent_cell = self.current_scope
-        return parent_cell.add_port(*args, **kwargs)
-
-    def x_add_net(self, *args, **kwargs):
-        parent_cell = self.current_scope
-        return parent_cell.add_net(*args, **kwargs)
-
-    def x_add_instance(self, *args, **kwargs):
-        parent_cell = self.current_scope
-        return parent_cell.add_instance(*args, **kwargs)
-
-    def x_add_pin(self, *args, **kwargs):
-        parent_cell = self.current_scope
-        return parent_cell.add_pin(*args, **kwargs)
 
 #-------------------------------------------------------------------------------
 class Writer(object):
