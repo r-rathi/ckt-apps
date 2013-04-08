@@ -54,15 +54,17 @@ def main(args=None):
     #print "-"*80
     #apps.report_hierarchy(cell)
 
-    ckt.write_spice(cell)
+    #ckt.write_spice(cell)
 
-    print "-"*80
+    #print "-"*80
     cell.ungroup(flatten=True)
     #print cell
-    ckt.write_spice(cell)
+    #ckt.write_spice(cell)
 
-    print "-"*80
-    apps.report_net(cell)
+    #print "-"*80
+    lib = arg_ns.lib.name
+    netlists = [f.name for f in arg_ns.spice_files]
+    apps.report_net(cell, lib, netlists)
 
     #print "-"*80
     #apps.report_hierarchy(cell)
