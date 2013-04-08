@@ -40,7 +40,7 @@ Or, if python is not in you path, then:
 
 Example
 -------
-`bin/report_net.py` reports the wire, driver, and load capacitances and the driver fanout for al the nets in a specified cell. If no cell is given, then the (first) top-cell is used. For example, using the data from `ckt-apps/test_data`:
+`bin/report_net.py` reports the wire, driver, and load capacitances and the driver fanout for all the nets in a specified cell. If no cell is given, then the (first) top-cell is used. Using the lib and netlist from `ckt-apps/test_data`:
 
     $ bin/report_net.py --lib test_data/lib.sp test_data/test1.sp
 
