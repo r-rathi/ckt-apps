@@ -38,6 +38,45 @@ Or, if python is not in you path, then:
 
     $ /path/to/python /path/to/ckt-apps/bin/report_net.py -h
 
+Example
+-------
+`bin/report_net.py` reports the wire, driver, and load capacitances and the driver fanout for al the nets in a specified cell. If no cell is given, then the (first) top-cell is used. For example, using the data from `ckt-apps/test_data`:
+
+    $ bin/report_net.py --lib test_data/lib.sp test_data/test1.sp
+
+    ****************************************
+    Report : net
+            -capacitance=True
+            -fanout=True
+            -sortby=fanout, reversesort=True
+    Cell   : buf
+    Date   : 02:04AM April 08, 2013
+    ****************************************
+    
+    Lib     : test_data/lib.sp
+    Netlist : test_data/test1.sp
+    
+    Fields:
+    - net     : net name
+    - cwire   : wire capacitance (fF)
+    - cload   : load (gate connected transistors) capacitance (fF)
+    - cdriver : driver (src/drain connected transistors) capacitance (fF)
+    - fanout  : fanout of the driver = cout/cin = (cwire + cload)/cdriver
+    
+    --------------------------------------------
+      net     cwire   cload   cdriver   fanout  
+    --------------------------------------------
+      n2        8.0     0.4       0.2     42.0  
+      b2/n2     5.0     0.2       0.2     26.0  
+      b3/n2     9.0     0.4       0.4     23.5  
+      vss      21.0     0.0       0.9     23.3  
+      b1/n2     4.0     0.4       0.2     22.0  
+      vdd      15.0     0.0       0.9     16.7  
+      y         6.0     0.0       0.4     15.0  
+      n1        3.0     0.2       0.4      8.0  
+      a         1.0     0.2       0.0      0.0  
+    --------------------------------------------
+
 License
 -------
 Copyright (c) 2013 Rohit Rathi &lt;rrathi.appdev@gmail.com&gt;

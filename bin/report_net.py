@@ -18,7 +18,8 @@ from cktapps.formats import spice
 
 #-------------------------------------------------------------------------------
 def main(args=None):
-    parser = argparse.ArgumentParser(description="Report net fanout")
+    parser = argparse.ArgumentParser(description="Report net capacitances "
+                                                 "and fanout")
 
     parser.add_argument('spice_files', metavar='file', nargs='+',
                         type=argparse.FileType('r'), help='spice netlist file(s)')
@@ -26,7 +27,8 @@ def main(args=None):
     parser.add_argument('--lib', type=argparse.FileType('r'),
                         help='lib file(s) with model (e.g. nch, pch) defintions')
 
-    parser.add_argument('--cell', help='name of the cell to be analyzed')
+    parser.add_argument('--cell', help='name of the cell to be analyzed '
+                                       '(top cell by default)')
 
     arg_ns = parser.parse_args(args)
 
