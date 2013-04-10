@@ -1,8 +1,10 @@
 #-------------------------------------------------------------------------------
 from __future__ import print_function
 import collections
-from packages import prettytable
 import datetime
+
+from cktapps.packages import prettytable
+from cktapps.core import Ckt
 
 #-------------------------------------------------------------------------------
 def report_net(cell, lib, netlists):
@@ -28,6 +30,10 @@ def report_net(cell, lib, netlists):
         #print("drivers:", ",".join([i.name for i in drivers]), end=' ')
         #print("loads:", ",".join([i.name for i in loads]))
 
+    if isinstance(cell, Ckt) and not cell.name:
+        cell_name = '$root'
+    else:
+        cell_name = cell.name
 
     print(
 """****************************************
@@ -49,7 +55,7 @@ Fields:
 - cdriver : driver (src/drain connected transistors) capacitance (fF)
 - fanout  : fanout of the driver = cout/cin = (cwire + cload)/cdriver
 """
-    % (cell.name, datetime.datetime.now().strftime("%I:%m%p %B %d, %Y"),
+    % (cell_name, datetime.datetime.now().strftime("%I:%m%p %B %d, %Y"),
        lib, "\n          ".join(netlists)))
 
 

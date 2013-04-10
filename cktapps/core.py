@@ -587,6 +587,8 @@ class Ckt(Cell):
     """
 
     def __init__(self, name="", params=None):
+        if params is None:
+            params = {}
         super(Ckt, self).__init__(name, portnames=[], params=params)
         self._reader_cache = {}
 
