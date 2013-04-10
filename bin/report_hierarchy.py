@@ -45,7 +45,11 @@ def main(args=None):
     if arg_ns.cell:
         cell = ckt.get_cell(arg_ns.cell)
     else:
-        cell = ckt.get_topcells()[0]
+        topcells = ckt.get_topcells()
+        if topcells:
+            cell = topcells[0]
+        else:
+            cell = ckt
 
     apps.report_hierarchy(cell)
 

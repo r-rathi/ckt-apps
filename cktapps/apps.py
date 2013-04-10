@@ -112,7 +112,7 @@ def report_hierarchy(cell):
 def _print_cell_hierarchy(cell, indent):
     for inst in cell.all_instances():
         print("%s|-- %s (%s)" % (' ' * 4  * indent, inst.name, inst.refname))
-        if inst.ishier:
+        if inst.is_hierarchical:
             _print_cell_hierarchy(inst.ref, indent + 1)
             print()
 
