@@ -57,21 +57,23 @@ def spice_suffix_val(suffix):
     suffix = suffix.lower()
     return suffix_val.get(suffix[:3]) or suffix_val.get(suffix[:1], 1.0)
 
-def eval_spice_number(num_or_str):
-    if isinstance(num_or_str, (int, float)):
-        return num_or_str
-
-    m = RE_SPICE_NUMBER.match(num_or_str)
-    if m:
-        number, suffix = m.groups()
-        return float(number) * spice_suffix_val(suffix)
-    else:
-        return None
-
 def replace_spice_number(s):
     def repl(m):
-        return str(eval_spice_number(m.group()))
+        if m:
+            number, suffix = m.groups()
+        if suffix is None:
+            return number
+        return '(%s*%s)' % (number, spice_suffix_val(suffix))
     return RE_SPICE_NUMBER.sub(repl, s)
+
+def eval_spice_number(s):
+    def _eval(m):
+        number, suffix = m.groups()
+        if suffix is None:
+            return number
+        sgn = '+' if number.startswith('+') else ''
+        return '%s%s' % (sgn, float(number) * spice_suffix_val(suffix))
+    return RE_SPICE_NUMBER.sub(_eval, s)
 
 #-------------------------------------------------------------------------------
 class SyntaxError(Exception): pass
@@ -209,6 +211,7 @@ class Reader(object):
                 if not v:
                     raise SyntaxError("missing parameter value: %s=?" % k)
                 #kwargs[k] = v
+                v = eval_spice_number(v)
                 kwargs[k.lower()] = v.lower()
                 args_done = True
             else:

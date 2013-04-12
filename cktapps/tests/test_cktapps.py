@@ -274,6 +274,25 @@ class TestSpiceParseLine:
                           'comment': '$ c1 c2'
                          }
 
+    def test_spice_units1(self):
+        tokens = 'mxy a1 a2 kw1=1.0e-15 kw2=1ff'.split()
+        parsed = spice.Reader._parse(tokens)
+        assert parsed == {'type'   : ['element', 'm'],
+                          'args'   : ['mxy', 'a1', 'a2'],
+                          'kwargs' : OrderedDict(kw1='1.0e-15', kw2='1e-15'),
+                          'comment': ''
+                         }
+
+    def test_spice_units2(self):
+        tokens = 'mxy a1 a2 kw1=1.0p kw2=(1m*1p)+1e-15'.split()
+        parsed = spice.Reader._parse(tokens)
+        assert parsed == {'type'   : ['element', 'm'],
+                          'args'   : ['mxy', 'a1', 'a2'],
+                          'kwargs' : OrderedDict(kw1='1e-12',
+                                                 kw2='(0.001*1e-12)+1e-15'),
+                          'comment': ''
+                         }
+
 class TestSpiceMacromodel:
     def test_simple(self):
         f = StringIO(dedent(
@@ -561,8 +580,12 @@ class TestL3HierarchicalParams:
     def make_ckt(self):
         f = StringIO(dedent(
             """\
-            .macromodel pch_mac pmos d g s b m=1 cg="m*w*l*0.05"
-            .macromodel nch_mac nmos d g s b m=1 cg="m*w*l*0.05"
+            .macromodel pch_mac pmos d g s b m=1
+            +cga='1fF/(1um * 20nm)'
+            +cg="m * w * l * cga"
+            .macromodel nch_mac nmos d g s b m=1
+            +cga='1fF/(1um * 20nm)'
+            +cg="m * w * l * cga"
 
             .subckt pinv a y vdd vss w=2 l=2.0
             xmp y a vdd vdd pch_mac w="2*W" l=1.0

@@ -311,17 +311,17 @@ class Instance(object):
 
 
     def _build_ctx(self, ctx):
-        print("> cell ctx:", self, ctx)
+        #print("> cell ctx:", self, ctx)
         # evaluate only inst params (in cell context)
         inst_ctx = {}
         for pname, p in self.params.items():
             inst_ctx[pname] = p.eval(ctx)
-        print("< inst ctx:", self, inst_ctx)
+        #print("< inst ctx:", self, inst_ctx)
         return inst_ctx
 
     #---------------------------------------------------------------------------
     def link(self):
-        print("Linking:", self)
+        #print("Linking:", self)
         if self.is_linked: return
         self._resolve_ref()
         self._bind()
@@ -368,9 +368,9 @@ class Instance(object):
 
     #---------------------------------------------------------------------------
     def ungroup(self, flatten=False, prefix='', sep='/', ctx=None):
-        print("ungrouping %r:" % self, ctx)
+        #print("ungrouping %r:" % self, ctx)
         if not self.is_hierarchical:
-            print("--> not hierarchical")
+            #print("--> not hierarchical")
             return
 
         if not self.is_linked:
@@ -603,12 +603,12 @@ class Cell(object):
             raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
     def _build_ctx(self, ctx):
-        print("> inst ctx:", self, ctx)
+        #print("> inst ctx:", self, ctx)
         # parameters found in inst context override cell params
         cell_ctx = dict(ctx)
         for pname, p in self.params.items():
             cell_ctx.setdefault(pname, p.eval(cell_ctx))
-        print("< cell ctx:", self, cell_ctx)
+        #print("< cell ctx:", self, cell_ctx)
         return cell_ctx
 
     #---------------------------------------------------------------------------
@@ -630,7 +630,7 @@ class Cell(object):
 
     #---------------------------------------------------------------------------
     def link(self):
-        print("Linking:", self)
+        #print("Linking:", self)
         for cell in self.all_cells():
             cell.link()
         for inst in self.all_instances():
@@ -639,7 +639,7 @@ class Cell(object):
     #---------------------------------------------------------------------------
     def ungroup(self, instname=None, flatten=False, prefix='', sep='/',
                 ctx=None):
-        print("ungrouping %r:" % self)
+        #print("ungrouping %r:" % self)
         if ctx is None:
             cell_ctx = self._build_ctx({})
         else:
