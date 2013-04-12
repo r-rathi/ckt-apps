@@ -3,6 +3,7 @@
 import pytest
 from StringIO import StringIO
 from collections import OrderedDict
+from textwrap import dedent
 
 from cktapps import core
 from cktapps import Ckt
@@ -95,10 +96,16 @@ class TestSpiceSplitLine:
         assert tokens == ['a1', 'a2', 'k1=v1', 'k2=v2',
                           'k3=v3', 'k4=v4']
 
-    def test_kwargs_exp(self):
+    def test_kwargs_exp1(self):
         line = 'a1 a2  k1=" 1* 2" k2 = " (1 + v2) " k3 = 3.0p k4= v4 '
         tokens = spice.Reader._tokenize(line)
-        assert tokens == ['a1', 'a2', 'k1="1*2"', 'k2="(1+v2)"',
+        assert tokens == ['a1', 'a2', 'k1=1*2', 'k2=(1+v2)',
+                          'k3=3.0p', 'k4=v4']
+
+    def test_kwargs_exp2(self):
+        line = 'a1 a2  k1=\' 1* 2\' k2 = " (1 + v2) " k3 = \'3.0p \' k4= v4 '
+        tokens = spice.Reader._tokenize(line)
+        assert tokens == ['a1', 'a2', 'k1=1*2', 'k2=(1+v2)',
                           'k3=3.0p', 'k4=v4']
 
     def test_blank_line(self):
@@ -269,11 +276,11 @@ class TestSpiceParseLine:
 
 class TestSpiceMacromodel:
     def test_simple(self):
-        f = StringIO(
-            """
-.macromodel nch_mac nmos d g s b w=1 l=1
-+ cg="w * l * 0.05" $ gate cap (F)
-            """)
+        f = StringIO(dedent(
+            """\
+            .macromodel nch_mac nmos d g s b w=1 l=1
+            + cg="w * l * 0.05" $ gate cap (F)
+            """))
         f.name = "<string>"
 
         ckt = Ckt()
@@ -350,4 +357,265 @@ class TestCktObjContainer:
         assert list(objcont.filter(name=".*x.")) == [objx1, objx2]
         assert list(objcont.filter(name=".*1")) == [obj1, objx1]
 
+
+class TestL0HierarchicalParams:
+    def make_ckt(self):
+        f = StringIO(dedent(
+            """\
+            .macromodel pch_mac pmos d g s b m=1 cg="m*w*l*0.05"
+            .macromodel nch_mac nmos d g s b m=1 cg="m*w*l*0.05"
+
+            .subckt pinv a y vdd vss w=2 l=2.0
+            xmp y a vdd vdd pch_mac w="2*W" l=1.0
+            xmn y a vss vss nch_mac W=w     l=1.0
+            .ends
+            """))
+        f.name = "<string>"
+        ckt = Ckt()
+        ckt.read_spice(f)
+        return ckt
+
+    def test_param_value(self):
+        ckt = self.make_ckt()
+        pinv = ckt.get_cell('pinv')
+        assert pinv.get_param('w').value == '2'
+        assert pinv.get_param('l').value == '2.0'
+        xmp = pinv.get_instance('mp')
+        assert xmp.get_param('w').value == '2*w'
+        assert xmp.get_param('l').value == '1.0'
+        xmn = pinv.get_instance('mn')
+        assert xmn.get_param('w').value == 'w'
+        assert xmn.get_param('l').value == '1.0'
+
+    def test_cell_param_eval(self):
+        ckt = self.make_ckt()
+        pinv = ckt.get_cell('pinv')
+        assert pinv.eval_param('w') == 2.0
+        assert pinv.eval_param('l') == 2.0
+
+    def test_inst_param_eval(self):
+        ckt = self.make_ckt()
+        pinv = ckt.get_cell('pinv')
+        pinv.link()
+        xmp = pinv.get_instance('mp')
+        assert xmp.eval_param('w') == 4.0
+        assert xmp.eval_param('l') == 1.0
+        xmn = pinv.get_instance('mn')
+        assert xmn.eval_param('w') == 2.0
+        assert xmn.eval_param('l') == 1.0
+
+    def test_ref_param_eval(self):
+        ckt = self.make_ckt()
+        pinv = ckt.get_cell('pinv')
+        pinv.link()
+        xmp = pinv.get_instance('mp')
+        assert xmp.eval_ref_param('w') == 4.0
+        assert xmp.eval_ref_param('l') == 1.0
+        assert xmp.ref.get_param('cg').value == 'm*w*l*0.05'
+        assert xmp.eval_ref_param('cg') == 0.2
+        xmn = pinv.get_instance('mn')
+        assert xmn.eval_ref_param('w') == 2.0
+        assert xmn.eval_ref_param('l') == 1.0
+        assert xmn.ref.get_param('cg').value == 'm*w*l*0.05'
+        assert xmn.eval_ref_param('cg') == 0.1
+
+class TestL1HierarchicalParams:
+    def make_ckt(self):
+        f = StringIO(dedent(
+            """\
+            .macromodel pch_mac pmos d g s b m=1 cg="m*w*l*0.05"
+            .macromodel nch_mac nmos d g s b m=1 cg="m*w*l*0.05"
+
+            .subckt pinv a y vdd vss w=2 l=2.0
+            xmp y a vdd vdd pch_mac w="2*W" l=1.0
+            xmn y a vss vss nch_mac W=w     l=1.0
+            .ends
+
+            .subckt buf a y vdd vss
+            xi1 a n vdd vss pinv
+            xi2 n y vdd vss pinv
+            .ends
+            """))
+        f.name = "<string>"
+        ckt = Ckt()
+        ckt.read_spice(f)
+        return ckt
+
+    def test_non_hier_ref_param_eval(self):
+        ckt = self.make_ckt()
+        pinv = ckt.get_cell('pinv')
+        pinv.link()
+        xmp = pinv.get_instance('mp')
+        assert xmp.ref.get_param('cg').value == 'm*w*l*0.05'
+        assert xmp.eval_ref_param('cg') == 0.2
+        xmn = pinv.get_instance('mn')
+        assert xmn.ref.get_param('cg').value == 'm*w*l*0.05'
+        assert xmn.eval_ref_param('cg') == 0.1
+
+    def test_hier_ref_param_eval(self):
+        ckt = self.make_ckt()
+        buf = ckt.get_cell('buf')
+        buf.link()
+        xi1 = buf.get_instance('i1')
+        assert xi1.ref.get_param('w').value == '2'
+        assert xi1.eval_ref_param('w') == 2.0
+        assert xi1.eval_ref_param('l') == 2.0
+        xi2 = buf.get_instance('i2')
+        assert xi2.ref.get_param('w').value == '2'
+        assert xi2.eval_ref_param('w') == 2.0
+        assert xi1.eval_ref_param('l') == 2.0
+
+    def test_hier_flatten_param_eval(self):
+        ckt = self.make_ckt()
+        buf = ckt.get_cell('buf')
+        buf.link()
+        buf.ungroup(flatten=True)
+
+        xi1_mp = buf.get_instance('i1/mp')
+        assert xi1_mp.get_param('w').value == '2*w'
+        assert xi1_mp.eval_ref_param('w') == 4.0
+        assert xi1_mp.eval_ref_param('l') == 1.0
+        assert xi1_mp.eval_ref_param('cg') == 0.2
+
+        xi1_mn = buf.get_instance('i1/mn')
+        assert xi1_mn.get_param('w').value == 'w'
+        assert xi1_mn.eval_ref_param('w') == 2.0
+        assert xi1_mn.eval_ref_param('l') == 1.0
+        assert xi1_mn.eval_ref_param('cg') == 0.1
+
+        xi2_mp = buf.get_instance('i2/mp')
+        assert xi2_mp.get_param('w').value == '2*w'
+        assert xi2_mp.eval_ref_param('w') == 4.0
+        assert xi2_mp.eval_ref_param('l') == 1.0
+        assert xi2_mp.eval_ref_param('cg') == 0.2
+
+        xi2_mn = buf.get_instance('i2/mn')
+        assert xi2_mn.get_param('w').value == 'w'
+        assert xi2_mn.eval_ref_param('w') == 2.0
+        assert xi2_mn.eval_ref_param('l') == 1.0
+        assert xi2_mn.eval_ref_param('cg') == 0.1
+
+class TestL2HierarchicalParams:
+    def make_ckt(self):
+        f = StringIO(dedent(
+            """\
+            .macromodel pch_mac pmos d g s b m=1 cg="m*w*l*0.05"
+            .macromodel nch_mac nmos d g s b m=1 cg="m*w*l*0.05"
+
+            .subckt pinv a y vdd vss w=2 l=2.0
+            xmp y a vdd vdd pch_mac w="2*W" l=1.0
+            xmn y a vss vss nch_mac W=w     l=1.0
+            .ends
+
+            .subckt buf a y vdd vss
+            xi1 a n vdd vss pinv
+            xi2 n y vdd vss pinv w=3 l=3 
+            xi3 n y vdd vss pinv w=5 l=5
+            .ends
+            """))
+        f.name = "<string>"
+        ckt = Ckt()
+        ckt.read_spice(f)
+        return ckt
+
+    def test_hier_flatten_param_eval(self):
+        ckt = self.make_ckt()
+        buf = ckt.get_cell('buf')
+        buf.link()
+        buf.ungroup(flatten=True)
+
+        xi1_mp = buf.get_instance('i1/mp')
+        assert xi1_mp.get_param('w').value == '2*w'
+        assert xi1_mp.eval_ref_param('w') == 4.0
+        assert xi1_mp.eval_ref_param('l') == 1.0
+        assert xi1_mp.eval_ref_param('cg') == 0.2
+        xi1_mn = buf.get_instance('i1/mn')
+        assert xi1_mn.get_param('w').value == 'w'
+        assert xi1_mn.eval_ref_param('w') == 2.0
+        assert xi1_mn.eval_ref_param('l') == 1.0
+        assert xi1_mn.eval_ref_param('cg') == 0.1
+
+        xi2_mp = buf.get_instance('i2/mp')
+        assert xi2_mp.get_param('w').value == '2*w'
+        assert xi2_mp.eval_ref_param('w') == 6.0
+        assert xi2_mp.eval_ref_param('l') == 1.0
+        assert abs(xi2_mp.eval_ref_param('cg') - 0.3) < 1e-6
+        xi2_mn = buf.get_instance('i2/mn')
+        assert xi2_mn.get_param('w').value == 'w'
+        assert xi2_mn.eval_ref_param('w') == 3.0
+        assert xi2_mn.eval_ref_param('l') == 1.0
+        assert abs(xi2_mn.eval_ref_param('cg') - 0.15) < 1e-6
+
+        xi3_mp = buf.get_instance('i3/mp')
+        assert xi3_mp.get_param('w').value == '2*w'
+        assert xi3_mp.eval_ref_param('w') == 10.0
+        assert xi3_mp.eval_ref_param('l') == 1.0
+        assert abs(xi3_mp.eval_ref_param('cg') - 0.5) < 1e-6
+        xi3_mn = buf.get_instance('i3/mn')
+        assert xi3_mn.get_param('w').value == 'w'
+        assert xi3_mn.eval_ref_param('w') == 5.0
+        assert xi3_mn.eval_ref_param('l') == 1.0
+        assert abs(xi3_mn.eval_ref_param('cg') - 0.25) < 1e-6
+
+class TestL3HierarchicalParams:
+    def make_ckt(self):
+        f = StringIO(dedent(
+            """\
+            .macromodel pch_mac pmos d g s b m=1 cg="m*w*l*0.05"
+            .macromodel nch_mac nmos d g s b m=1 cg="m*w*l*0.05"
+
+            .subckt pinv a y vdd vss w=2 l=2.0
+            xmp y a vdd vdd pch_mac w="2*W" l=1.0
+            xmn y a vss vss nch_mac W=w     l=1.0
+            .ends
+
+            .subckt buf a y vdd vss w1=0 w2=3 w3=5
+            xi1 a n vdd vss pinv
+            xi2 n y vdd vss pinv w='(w2)'
+            xi3 n y vdd vss pinv w=w3 l=5
+            .ends
+            """))
+        f.name = "<string>"
+        ckt = Ckt()
+        ckt.read_spice(f)
+        return ckt
+
+    def test_hier_flatten_param_eval(self):
+        ckt = self.make_ckt()
+        buf = ckt.get_cell('buf')
+        buf.link()
+        buf.ungroup(flatten=True)
+
+        xi1_mp = buf.get_instance('i1/mp')
+        assert xi1_mp.get_param('w').value == '2*w'
+        assert xi1_mp.eval_ref_param('w') == 4.0
+        assert xi1_mp.eval_ref_param('l') == 1.0
+        assert xi1_mp.eval_ref_param('cg') == 0.2
+        xi1_mn = buf.get_instance('i1/mn')
+        assert xi1_mn.get_param('w').value == 'w'
+        assert xi1_mn.eval_ref_param('w') == 2.0
+        assert xi1_mn.eval_ref_param('l') == 1.0
+        assert xi1_mn.eval_ref_param('cg') == 0.1
+
+        xi2_mp = buf.get_instance('i2/mp')
+        assert xi2_mp.get_param('w').value == '2*w'
+        assert xi2_mp.eval_ref_param('w') == 6.0
+        assert xi2_mp.eval_ref_param('l') == 1.0
+        assert abs(xi2_mp.eval_ref_param('cg') - 0.3) < 1e-6
+        xi2_mn = buf.get_instance('i2/mn')
+        assert xi2_mn.get_param('w').value == 'w'
+        assert xi2_mn.eval_ref_param('w') == 3.0
+        assert xi2_mn.eval_ref_param('l') == 1.0
+        assert abs(xi2_mn.eval_ref_param('cg') - 0.15) < 1e-6
+
+        xi3_mp = buf.get_instance('i3/mp')
+        assert xi3_mp.get_param('w').value == '2*w'
+        assert xi3_mp.eval_ref_param('w') == 10.0
+        assert xi3_mp.eval_ref_param('l') == 1.0
+        assert abs(xi3_mp.eval_ref_param('cg') - 0.5) < 1e-6
+        xi3_mn = buf.get_instance('i3/mn')
+        assert xi3_mn.get_param('w').value == 'w'
+        assert xi3_mn.eval_ref_param('w') == 5.0
+        assert xi3_mn.eval_ref_param('l') == 1.0
+        assert abs(xi3_mn.eval_ref_param('cg') - 0.25) < 1e-6
 

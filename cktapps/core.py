@@ -174,6 +174,17 @@ class Net(object):
     def __repr__(self):
         return "Net(%s)" % self.name
 
+class Param(object):
+    def __init__(self, name, value):
+        self.name = name
+        self.value = value
+
+    def eval(self, namespace):
+        return eval(self.value, {"__builtins__":None}, namespace)
+
+    def __repr__(self):
+        return "Param(%s, %s)" % (self.name, self.value)
+
 class Instance(object):
     def __init__(self, name, refname, params):
         self.name = name
@@ -184,10 +195,15 @@ class Instance(object):
 
         self.pins = []
 
-        if params is None:
-            self.params = {}
-        else:
-            self.params = params
+        self.params = collections.OrderedDict()
+
+        for name, value in params.items():
+            param = Param(name, value)
+            self.params[name] = param
+
+        self._ctx = None
+        #self._owner_ctx = None
+        self._ref_ctx = None
 
         self.is_hierarchical = False
         self.is_linked = False
@@ -197,6 +213,17 @@ class Instance(object):
     #def full_name(self):
     #    scope_path = "/".join([cell.name for cell in self.scope_path])
     #    return scope_path + "/" + self.name
+
+    #---------------------------------------------------------------------------
+    def _uniq(self, name, ctx):
+        # unique (de-contextualized) copy
+        cpy = copy.copy(self)
+        cpy.name = name
+        if not cpy._ctx:
+            cpy._ctx = cpy._build_ctx(ctx)
+        if not cpy._ref_ctx:
+            cpy._ref_ctx = cpy.ref._build_ctx(cpy._ctx)
+        return cpy
 
     #---------------------------------------------------------------------------
     def add_pins_by_pos(self, *netnames): pass
@@ -224,57 +251,77 @@ class Instance(object):
         raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
     #---------------------------------------------------------------------------
-    def get_param(self, param):
-        return self.params[param]
+    def add_param(self, name, value):
+        if name is None:
+            raise CktObjValueError("param has no name")
+        param = Param(name, value)
+        self.params[name] = param
+        return param
 
-    def _tostr(self, s):
-        if isinstance(s, basestring):
-            return s
+    def all_params(self):
+        return self.params.itervalues()
+
+    def get_param(self, name):
+        try:
+            return self.params[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+    def eval_param(self, name, ctx=None):
+        assert self.owner is not None
+        if ctx is None:
+            cell_ctx = self.owner._build_ctx({})
         else:
-            return str(s)
+            cell_ctx = ctx
 
-    def _destr(self, s):
-        if isinstance(s, basestring) and re.search('"', s):
-            #print('removing ":', s)
-            s = re.sub('"', '', s)
+        if self._ctx is None:
+            inst_ctx = self._build_ctx(cell_ctx)
         else:
-            #print('converting to float', s)
-            s = float(s)
-        #print('>>', s)
-        return s
+            inst_ctx = self._ctx
 
-    def eval_param(self, param):
-        if self._eval_params is None:
-            # initialize _eval_params with refcell params
-            self._eval_params = {}
-            prim = self.owner.search_scope_prim(self.refname)
-            for k, v in prim.params.items():
-                v = self._destr(v.lower())
-                self._eval_params[k.lower()] = v
+        try:
+            return inst_ctx[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
-            # eval instance (self) params in parent_cell namespace and
-            # add/overwrite to _eval_params
-            parent_cell_ns = {}
-            for k, v in self.owner.params.items():
-                parent_cell_ns[k.lower()] = float(v)
+    def eval_ref_param(self, name, ctx=None):
+        if not self.is_linked:
+            raise(LinkError("can't eval ref param '%s' "
+                            "(%r not linked yet)" % (name, self)))
+        if self._ctx is None:
+            if ctx is None:
+                assert self.owner is not None
+                cell_ctx = self.owner._build_ctx({})
+            else:
+                cell_ctx = ctx
+            inst_ctx = self._build_ctx(cell_ctx)
+        else:
+            inst_ctx = self._ctx
 
-            #print("pns:", self, parent_cell_ns)
-            for k, v in self.params.items():
-                v = self._destr(v.lower())
-                if isinstance(v, basestring):
-                    v = eval(v, {"__builtins__":None}, parent_cell_ns)
-                self._eval_params[k.lower()] = v
+        if self._ref_ctx is None:
+            assert self.ref is not None
+            ref_ctx = self.ref._build_ctx(inst_ctx)
+        else:
+            ref_ctx = self._ref_ctx
 
-        p = self._eval_params[param.lower()]
-        p = re.sub('"', '', p)
-        if isinstance(p, basestring):
-            #print("Will eval %s with vars %s" % (p, self._eval_params))
-            p = eval(p, {"__builtins__":None}, self._eval_params)
-            #print(">>", p)
-        return p
+        try:
+            return ref_ctx[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+
+    def _build_ctx(self, ctx):
+        print("> cell ctx:", self, ctx)
+        # evaluate only inst params (in cell context)
+        inst_ctx = {}
+        for pname, p in self.params.items():
+            inst_ctx[pname] = p.eval(ctx)
+        print("< inst ctx:", self, inst_ctx)
+        return inst_ctx
 
     #---------------------------------------------------------------------------
     def link(self):
+        print("Linking:", self)
         if self.is_linked: return
         self._resolve_ref()
         self._bind()
@@ -318,18 +365,31 @@ class Instance(object):
         for pin, port in zip(inst_pins, ref_ports):
                 pin.port = port
 
+
     #---------------------------------------------------------------------------
-    def ungroup(self, flatten=False, prefix='', sep='/'):
-        if not self.is_hierarchical: return
-        #print("ungrouping %r" % self)
+    def ungroup(self, flatten=False, prefix='', sep='/', ctx=None):
+        print("ungrouping %r:" % self, ctx)
+        if not self.is_hierarchical:
+            print("--> not hierarchical")
+            return
 
         if not self.is_linked:
             raise(LinkError("can't ungroup %r before it's linked" % self))
         assert self.ref is not None
 
+        # build inst context
+        if ctx is None:
+            inst_ctx = self._build_ctx({})
+        else:
+            inst_ctx = self._build_ctx(ctx)
+
         if flatten:
-            #TODO: maybe we should copy ref before ungroup(flatten=True)
-            self.ref.ungroup(flatten=True, prefix='', sep=sep)
+            uniq_ref = self.ref._uniq()
+            ref_ctx  = uniq_ref.ungroup(flatten=True, prefix='', sep=sep,
+                                        ctx=inst_ctx)
+        else:
+            uniq_ref = self.ref
+            ref_ctx = uniq_ref._build_ctx(inst_ctx)
 
         presep = prefix + self.name + sep
 
@@ -337,17 +397,16 @@ class Instance(object):
         for pin in self.all_pins():
             pinmap[pin.port.name] = pin
 
-        for inst in list(self.ref.all_instances()):
-            new_inst = copy.copy(inst)
-            new_inst.name = presep + inst.name
-            new_inst.pins = []
-            self.owner.add_instance_obj(new_inst)
+        for inst in list(uniq_ref.all_instances()):
+            uniq_inst = inst._uniq(name=presep + inst.name, ctx=ref_ctx)
+            self.owner.add_instance_obj(uniq_inst)
+            uniq_inst.pins = []
             for pin in inst.all_pins():
                 if pin.net.name in pinmap:
                     net = pinmap[pin.net.name].net
                 else:
                     net = self.owner.get_net_else_add(presep + pin.net.name)
-                new_inst.add_pin_obj(Pin(pin.port, new_inst, net))
+                uniq_inst.add_pin_obj(Pin(pin.port, uniq_inst, net))
 
         self.owner.del_instance(self.name)
 
@@ -368,18 +427,6 @@ class Pin(object):
     def __repr__(self):
         return "Pin(%r, %r, %r)" % (self.port, self.instance, self.net)
 
-class Parameter(object):
-    def __init__(self, name, value, namespace):
-        self.name = name
-        self._value = value
-        self._namespace = namespace
-
-    def eval():
-        pass
-
-    def value():
-        pass
-
 class Cell(object):
     """ Cell is the fundamental container of all the circuit elements. A
     hierachical design is divided into multiple Cells. Cell maps to .subckt
@@ -390,19 +437,26 @@ class Cell(object):
     def __init__(self, name, portnames, params):
         self.name = name
 
+        self.owner = None
+
         self.cells = collections.OrderedDict()
         self.prims = collections.OrderedDict()
         self.ports = collections.OrderedDict()
         self.nets = collections.OrderedDict()
         self.instances = collections.OrderedDict()
+        self.params = collections.OrderedDict()
 
-        for portname in portnames:
-            self.add_port(portname)
-            self.add_net(portname)
+        for name in portnames:
+            net = Net(name, owner=self)
+            self.nets[name] = net
+            port = Port(name, owner=self)
+            self.ports[name] = port
 
-        self.params = params
+        for name, value in params.items():
+            param = Param(name, value)
+            self.params[name] = param
 
-        self.owner = None
+        #self._ctx = None
         self._ref_count = 0
 
     def full_name(self):
@@ -412,6 +466,11 @@ class Cell(object):
             scope_path.appendleft(scope.name)
             scope = scope.owner
         return "/".join(scope_path)
+
+    #---------------------------------------------------------------------------
+    def _uniq(self):
+        cpy = copy.copy(self)
+        return cpy
 
     #---------------------------------------------------------------------------
     def add_cell(self, name, portnames, params=None):
@@ -514,6 +573,45 @@ class Cell(object):
         return self.ports.itervalues()
 
     #---------------------------------------------------------------------------
+    def add_param(self, name, value):
+        if name is None:
+            raise CktObjValueError("param has no name")
+        param = Param(name, value)
+        self.params[name] = param
+        return param
+
+    def all_params(self):
+        return self.params.itervalues()
+
+    def get_param(self, name):
+        try:
+            return self.params[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+    def eval_param(self, name, ctx=None):
+        if ctx is None:
+            inst_ctx = {}
+        else:
+            inst_ctx = ctx
+
+        cell_ctx = self._build_ctx(inst_ctx)
+
+        try:
+            return cell_ctx[name]
+        except KeyError:
+            raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
+
+    def _build_ctx(self, ctx):
+        print("> inst ctx:", self, ctx)
+        # parameters found in inst context override cell params
+        cell_ctx = dict(ctx)
+        for pname, p in self.params.items():
+            cell_ctx.setdefault(pname, p.eval(cell_ctx))
+        print("< cell ctx:", self, cell_ctx)
+        return cell_ctx
+
+    #---------------------------------------------------------------------------
     def search_scope_cell(self, name):
         scope = self
         while scope:
@@ -532,22 +630,31 @@ class Cell(object):
 
     #---------------------------------------------------------------------------
     def link(self):
+        print("Linking:", self)
         for cell in self.all_cells():
             cell.link()
         for inst in self.all_instances():
             inst.link()
 
     #---------------------------------------------------------------------------
-    def ungroup(self, instname=None, flatten=False, prefix='', sep='/'):
-        #print("ungrouping %r" % self)
+    def ungroup(self, instname=None, flatten=False, prefix='', sep='/',
+                ctx=None):
+        print("ungrouping %r:" % self)
+        if ctx is None:
+            cell_ctx = self._build_ctx({})
+        else:
+            cell_ctx = self._build_ctx(ctx)
+
         if instname:
             inst = self.get_instance(instname)
-            inst.ungroup(flatten)
+            inst.ungroup(flatten=flatten, prefix=prefix, sep=sep, ctx=cell_ctx)
         else:
             # need to make a copy using list() becase inst.ungroup() modifies
             # the self.instances dict
             for inst in list(self.all_instances()):
-                inst.ungroup(flatten=flatten, prefix=prefix, sep=sep)
+                inst.ungroup(flatten=flatten, prefix=prefix, sep=sep,
+                             ctx=cell_ctx)
+        return cell_ctx
 
     #---------------------------------------------------------------------------
     def __repr__(self):

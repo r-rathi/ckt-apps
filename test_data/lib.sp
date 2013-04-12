@@ -1,5 +1,5 @@
-$.macromodel c c
-$+ c=1e-15
+.macromodel c c p n
++ c=1e-15
 
 .macromodel pch pmos d g s b m=1
 + cg="0.05 * w * l * m"

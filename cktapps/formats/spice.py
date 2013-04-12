@@ -28,6 +28,7 @@ class Utils(object):
 RE_BLANK_LINE       = re.compile(r"^\s*$")
 RE_COMMENT_LINE     = re.compile(r"^\s*[*$].*$")
 RE_TRAILING_COMMENT = re.compile(r"\s*[$].*$")
+RE_PARAM_EXPR       = re.compile(r'([\"\'])([^\"\']*)\1')
 
 # Regex for spice number parsing based on:
 #    http://search.cpan.org/~wimv/Number-Spice-0.011/Spice.pm
@@ -161,9 +162,9 @@ class Reader(object):
 
         # remove all spaces from within "..." (spice parameter expressions)
         def rm_space(matchobj):
-            return re.sub(r'\s+', '', matchobj.group(0))
+            return re.sub(r'\s+', '', matchobj.group(2))
 
-        line = re.sub(r'"([^"]*)"', rm_space, line)
+        line = RE_PARAM_EXPR.sub(rm_space, line)
 
         return line.split()
 
@@ -207,8 +208,8 @@ class Reader(object):
                 k, v = tok.split('=')
                 if not v:
                     raise SyntaxError("missing parameter value: %s=?" % k)
-
-                kwargs[k] = v
+                #kwargs[k] = v
+                kwargs[k.lower()] = v.lower()
                 args_done = True
             else:
                 if args_done:
@@ -265,6 +266,10 @@ class Reader(object):
         params['c'] = args[-1]
 
         inst = self.current_scope.add_instance(instname, cellname, params=params)
+
+        prim = self.ckt.get_prim(cellname)
+
+        inst.ref = prim
         inst.is_linked = True
 
         portnames = ['p', 'n']

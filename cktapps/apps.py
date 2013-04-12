@@ -21,15 +21,6 @@ def report_net(cell, lib, netlists):
             elif pin.instance.refname == 'c':
                 net_info[pin.net.name]['caps'].append(pin.instance)
 
-    for netname, info in net_info.items():
-        drivers = info['drivers']
-        loads   = info['loads']
-        caps    = info['caps']
-        #print("net:", netname, end=' ')
-        #print("caps:", ",".join([i.name for i in caps]), end=' ')
-        #print("drivers:", ",".join([i.name for i in drivers]), end=' ')
-        #print("loads:", ",".join([i.name for i in loads]))
-
     if isinstance(cell, Ckt) and not cell.name:
         cell_name = '$root'
     else:
@@ -77,26 +68,20 @@ Fields:
         load_cap = 0
 
         for i in caps:
-            net_cap += float(i.params['c'])
+            net_cap += i.eval_ref_param('c')
 
         for i in drivers:
-            cg = i.eval_param('cg')
+            cg = i.eval_ref_param('cg')
             driver_cap += cg
 
         for i in loads:
-            cg = i.eval_param('cg')
+            cg = i.eval_ref_param('cg')
             load_cap += cg
 
         if driver_cap == 0.0:
             fanout = 0.0
         else:
             fanout = (net_cap + load_cap)/driver_cap
-
-        #print("fo:", netname.ljust(12),
-        #             ("%1.2g" % net_cap).rjust(8),
-        #             ("%1.2g" % load_cap).rjust(8),
-        #             ("%1.2g" % driver_cap).rjust(8),
-        #             ("%.1f" % fanout).rjust(8), sep=" ")
 
         report.add_row([netname, net_cap*1e15, load_cap*1e15, driver_cap*1e15, fanout])
 
