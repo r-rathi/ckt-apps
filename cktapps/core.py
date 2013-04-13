@@ -367,7 +367,7 @@ class Instance(object):
 
 
     #---------------------------------------------------------------------------
-    def ungroup(self, flatten=False, prefix='', sep='/', ctx=None):
+    def ungroup(self, owner, flatten=False, prefix='', sep='/', ctx=None):
         #print("ungrouping %r:" % self, ctx)
         if not self.is_hierarchical:
             #print("--> not hierarchical")
@@ -399,16 +399,19 @@ class Instance(object):
 
         for inst in list(uniq_ref.all_instances()):
             uniq_inst = inst._uniq(name=presep + inst.name, ctx=ref_ctx)
-            self.owner.add_instance_obj(uniq_inst)
+            #self.owner.add_instance_obj(uniq_inst)
+            owner.add_instance_obj(uniq_inst)
             uniq_inst.pins = []
             for pin in inst.all_pins():
                 if pin.net.name in pinmap:
                     net = pinmap[pin.net.name].net
                 else:
-                    net = self.owner.get_net_else_add(presep + pin.net.name)
+                    #net = self.owner.get_net_else_add(presep + pin.net.name)
+                    net = owner.get_net_else_add(presep + pin.net.name)
                 uniq_inst.add_pin_obj(Pin(pin.port, uniq_inst, net))
 
-        self.owner.del_instance(self.name)
+        #self.owner.del_instance(self.name)
+        owner.del_instance(self.name)
 
     #---------------------------------------------------------------------------
     def __repr__(self):
@@ -470,6 +473,7 @@ class Cell(object):
     #---------------------------------------------------------------------------
     def _uniq(self):
         cpy = copy.copy(self)
+        cpy.instances = collections.OrderedDict(self.instances)
         return cpy
 
     #---------------------------------------------------------------------------
@@ -647,13 +651,14 @@ class Cell(object):
 
         if instname:
             inst = self.get_instance(instname)
-            inst.ungroup(flatten=flatten, prefix=prefix, sep=sep, ctx=cell_ctx)
+            inst.ungroup(owner=self, flatten=flatten, prefix=prefix, sep=sep,
+                         ctx=cell_ctx)
         else:
             # need to make a copy using list() becase inst.ungroup() modifies
             # the self.instances dict
             for inst in list(self.all_instances()):
-                inst.ungroup(flatten=flatten, prefix=prefix, sep=sep,
-                             ctx=cell_ctx)
+                inst.ungroup(owner=self, flatten=flatten, prefix=prefix,
+                             sep=sep, ctx=cell_ctx)
         return cell_ctx
 
     #---------------------------------------------------------------------------

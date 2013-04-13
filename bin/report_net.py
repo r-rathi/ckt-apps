@@ -75,8 +75,9 @@ def main(args=None):
 
     #print "-"*80
     #apps.report_hierarchy(cell)
+    return ckt
 
 #-------------------------------------------------------------------------------
 if __name__ == "__main__":
-    main()
+    ckt = main()
 

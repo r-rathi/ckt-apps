@@ -642,3 +642,44 @@ class TestL3HierarchicalParams:
         assert xi3_mn.eval_ref_param('l') == 1.0
         assert abs(xi3_mn.eval_ref_param('cg') - 0.25) < 1e-6
 
+class TestL4HierarchicalParams:
+    def make_ckt(self):
+        f = StringIO(dedent(
+            """\
+            .macromodel pch_mac pmos d g s b m=1
+            +cga='1fF/(1um * 20nm)'
+            +cg="m * w * l * cga"
+            .macromodel nch_mac nmos d g s b m=1
+            +cga='1fF/(1um * 20nm)'
+            +cg="m * w * l * cga"
+
+            .subckt pinv a y vdd vss wp=1 wn=1
+            xmp y a vdd vdd pch_mac w=wp l=1
+            xmn y a vss vss nch_mac W=wn l=1
+            .ends
+
+            .subckt inv a y vdd vss wp=1 wn=1
+            xi0 a y vdd vss pinv wp=wp wn=wn
+            .ends
+
+            .subckt buf a y vdd vss wp=2 wn=2
+            xi0 a n vdd vss inv wp=wp wn=wn
+            xi1 n y vdd vss inv wp="2*wp" wn="2*wn"
+            .ends
+            """))
+        f.name = "<string>"
+        ckt = Ckt()
+        ckt.read_spice(f)
+        return ckt
+
+    def test_hier_flatten_param_eval(self):
+        ckt = self.make_ckt()
+        ckt.link()
+        buf = ckt.get_cell('buf')
+        buf.ungroup(flatten=True)
+
+        i0_i0_mp = buf.get_instance('i0/i0/mp')
+        assert i0_i0_mp.eval_ref_param('w') == 2.0
+
+        i1_i0_mp = buf.get_instance('i1/i0/mp')
+        assert i1_i0_mp.eval_ref_param('w') == 4.0
