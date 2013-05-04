@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link href='https://fonts.googleapis.com/css?family=Architects+Daughter' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <title>Ckt-apps by r-rathi</title>
+  </head>
+
+  <body>
+    <header>
+      <div class="inner">
+        <h1>Ckt-apps</h1>
+        <h2>Circuit design and analysis utilities</h2>
+        <a href="https://github.com/r-rathi/ckt-apps" class="button"><small>View project on</small>GitHub</a>
+      </div>
+    </header>
+
+    <div id="content-wrapper">
+      <div class="inner clearfix">
+        <section id="main-content">
+          <h1>Ckt-apps: Circuit Design and Analysis Applications</h1>
+
+<p><strong>Ckt-apps</strong> is a suite of circuit design and anaysis (EDA) applications as well as the package (library) itself on which the applications are based.</p>
+
+<h2>Applications</h2>
+
+<p>The end-user applications are in the <em>bin</em> directory. Currently, following applications are provided:</p>
+
+<ul>
+<li>
+<code>bin/report_net.py</code> - Report nets in the design with summary of wire, driver, and load caps and fanouts.</li>
+</ul><h2>The cktapps package</h2>
+
+<p>The architecture of <code>cktapps</code> is very modular and extensible. The main componets are:</p>
+
+<ul>
+<li>
+<code>core</code> : At the <em>core</em> of ckt-apps is a circuit netlist database that represents the basic circuit elements and their connectivity. The database supports hierarchical designs, and can be queried as well as modified through the core API interface.</li>
+<li>
+<code>formats</code> : Contains netlist format specific modules that provide reading and writing in addition to any other format specific functionality. Following formats are currently supported:
+
+<ul>
+<li><code>spice</code></li>
+</ul>
+</li>
+<li>
+<code>apps</code> : Contains a library of design and analysis utilities in the form of importable functions, classes, and modules. The end-user scripts in the <em>bin</em> directory are essentially wrappers that provide a command-line interface and internally use one or more components from the the <em>apps</em> package to provide the end-user functionality.</li>
+</ul><h2>Installation</h2>
+
+<p>Clone the repository:</p>
+
+<pre><code>$git clone https://github.com/r-rathi/ckt-apps
+</code></pre>
+
+<p>Or, download the tarball:</p>
+
+<pre><code>$curl -L -o ckt-apps.tar.gz https://api.github.com/repos/r-rathi/ckt-apps/tarball
+</code></pre>
+
+<p>Or, go to <a href="https://github.com/r-rathi/ckt-apps">https://github.com/r-rathi/ckt-apps</a> and click on the ZIP button.</p>
+
+<h2>Usage</h2>
+
+<p>The applications should be called directly from the package directory:</p>
+
+<pre><code>$ /path/to/ckt-apps/bin/report_net.py -h
+</code></pre>
+
+<p>Or, if python is not in you path, then:</p>
+
+<pre><code>$ /path/to/python /path/to/ckt-apps/bin/report_net.py -h
+</code></pre>
+
+<h2>Example</h2>
+
+<p><code>bin/report_net.py</code> reports the wire, driver, and load capacitances and the driver fanout for all the nets in a specified cell. If no cell is given, then the (first) top-cell is used. Using the lib and netlist from <code>ckt-apps/test_data</code>:</p>
+
+<pre><code>$ bin/report_net.py --lib test_data/lib.sp test_data/test1.sp
+
+****************************************
+Report : net
+        -capacitance=True
+        -fanout=True
+        -sortby=fanout, reversesort=True
+Cell   : buf
+Date   : 02:04AM April 08, 2013
+****************************************
+
+Lib     : test_data/lib.sp
+Netlist : test_data/test1.sp
+
+Fields:
+- net     : net name
+- cwire   : wire capacitance (fF)
+- cload   : load (gate connected transistors) capacitance (fF)
+- cdriver : driver (src/drain connected transistors) capacitance (fF)
+- fanout  : fanout of the driver = cout/cin = (cwire + cload)/cdriver
+
+--------------------------------------------
+  net     cwire   cload   cdriver   fanout  
+--------------------------------------------
+  n2        8.0     0.4       0.2     42.0  
+  b2/n2     5.0     0.2       0.2     26.0  
+  b3/n2     9.0     0.4       0.4     23.5  
+  vss      21.0     0.0       0.9     23.3  
+  b1/n2     4.0     0.4       0.2     22.0  
+  vdd      15.0     0.0       0.9     16.7  
+  y         6.0     0.0       0.4     15.0  
+  n1        3.0     0.2       0.4      8.0  
+  a         1.0     0.2       0.0      0.0  
+--------------------------------------------
+</code></pre>
+
+<h2>License</h2>
+
+<p>Copyright (c) 2013 Rohit Rathi &lt;<a href="mailto:rrathi.appdev@gmail.com">rrathi.appdev@gmail.com</a>&gt;</p>
+
+<p>Ckt-apps is provided under the MIT License. See the <code>LICENSE</code> file for details.</p>
+        </section>
+
+        <aside id="sidebar">
+          <a href="https://github.com/r-rathi/ckt-apps/zipball/master" class="button">
+            <small>Download</small>
+            .zip file
+          </a>
+          <a href="https://github.com/r-rathi/ckt-apps/tarball/master" class="button">
+            <small>Download</small>
+            .tar.gz file
+          </a>
+
+          <p class="repo-owner"><a href="https://github.com/r-rathi/ckt-apps"></a> is maintained by <a href="https://github.com/r-rathi">r-rathi</a>.</p>
+
+          <p>This page was generated by <a href="pages.github.com">GitHub Pages</a> using the Architect theme by <a href="http://twitter.com/jasonlong">Jason Long</a>.</p>
+        </aside>
+      </div>
+    </div>
+
+  
+  </body>
+</html>
