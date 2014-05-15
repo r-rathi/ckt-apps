@@ -97,6 +97,10 @@ class Reader(object):
 
     #---------------------------------------------------------------------------
     def read(self, f):
+        from cktapps.core import CktObjAlreadyExists
+
+        skip_stmt = False
+
         for (line, fname, lineno) in self.read_line(f):
             try:
                 tokens = self._tokenize(line)
@@ -110,6 +114,12 @@ class Reader(object):
 
             major, minor = pstmt['type']
 
+            # Skip current subckt/macromodel if it has already been defined
+            if skip_stmt:
+                if major == 'control' and minor == 'ends':
+                    skip_stmt = False
+                continue
+
             # Skip comments for now
             if major == 'comment': continue
 
@@ -122,6 +132,10 @@ class Reader(object):
             except SyntaxError, e:
                 raise SyntaxError("%s [%s, %s]\n-> %s" %
                                   (e.args[0], fname, lineno, line))
+            except CktObjAlreadyExists, e:
+                skip_stmt = True
+                print("Warning: ignoring redefinition of cell %s [%s, %s]\n"
+                      "-> %s" % (str(e), fname, lineno, line))
 
     @classmethod
     def read_line(cls, f):
@@ -237,8 +251,7 @@ class Reader(object):
         try:
             self.pop_scope()
         except IndexError:
-            raise SyntaxError("keyword '.ends' unexpected here: %s, %s\n-> %s" %
-                                   (filename, lineno, orig_line))
+            raise SyntaxError("keyword '.ends' unexpected here")
 
     def _process_macromodel(self, pstmt):
         args = pstmt['args']

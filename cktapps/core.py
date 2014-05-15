@@ -19,6 +19,7 @@ class FileFormatError(Exception): pass
 class CktObjTypeError(Exception): pass
 class CktObjValueError(Exception): pass
 class CktObjDoesNotExist(Exception): pass
+class CktObjAlreadyExists(Exception): pass
 
 #-------------------------------------------------------------------------------
 class CktObj(object):
@@ -359,7 +360,7 @@ class Instance(object):
                             "> inst %s : %s" %
                             (self.ref.full_name(),
                              [port.name for port in ref_ports],
-                             self.ref.full_name() + "/" + self.name,
+                             self.owner.full_name() + "/" + self.name,
                              [pin.net.name for pin in inst_pins]))
 
         for pin, port in zip(inst_pins, ref_ports):
@@ -477,9 +478,11 @@ class Cell(object):
         return cpy
 
     #---------------------------------------------------------------------------
-    def add_cell(self, name, portnames, params=None):
+    def add_cell(self, name, portnames, params=None, overwrite=False):
         if name is None:
             raise CktObjValueError("cell has no name")
+        if not overwrite and name in self.cells:
+            raise CktObjAlreadyExists("'%s' in: '%s'" % (name, self))
         cell = Cell(name, portnames, params)
         cell.owner = self
         self.cells[name] = cell
@@ -495,9 +498,11 @@ class Cell(object):
             raise CktObjDoesNotExist("'%s' in: '%s'" % (name, self))
 
     #---------------------------------------------------------------------------
-    def add_prim(self, name, type, portnames, params=None):
+    def add_prim(self, name, type, portnames, params=None, overwrite=False):
         if name is None:
             raise CktObjValueError("prim has no name")
+        if not overwrite and name in self.prims:
+            raise CktObjAlreadyExists("'%s' in: '%s'" % (name, self))
         prim = Prim(name, type, portnames, params)
         prim.owner = self
         self.prims[name] = prim
@@ -633,12 +638,32 @@ class Cell(object):
         raise CktObjDoesNotExist(name)
 
     #---------------------------------------------------------------------------
-    def link(self):
+    def link(self, ignore_link_errors=False):
+        link_failed = False
         #print("Linking:", self)
+
         for cell in self.all_cells():
-            cell.link()
+            try:
+                cell.link(ignore_link_errors=ignore_link_errors)
+            except LinkError, e:
+                if ignore_link_errors:
+                    link_failed = True
+                    print("Error: %s. Ignoring..." % str(e))
+                else:
+                    raise e
+
         for inst in self.all_instances():
-            inst.link()
+            try:
+                inst.link()
+            except LinkError, e:
+                if ignore_link_errors:
+                    link_failed = True
+                    print("Error: %s. Ignoring..." % str(e))
+                else:
+                    raise e
+
+        if link_failed:
+            raise LinkError("failed to link cell '%s'" % self.full_name())
 
     #---------------------------------------------------------------------------
     def ungroup(self, instname=None, flatten=False, prefix='', sep='/',

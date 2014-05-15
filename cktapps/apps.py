@@ -63,18 +63,23 @@ Fields:
         loads   = info['loads']
         caps    = info['caps']
 
+        _debug('net: %s' % netname)
+
         net_cap = 0
         driver_cap = 0
         load_cap = 0
 
         for i in caps:
+            _debug('> cap %s %s' % (i.eval_ref_param('c'), i))
             net_cap += i.eval_ref_param('c')
 
         for i in drivers:
+            _debug('> %s driver %s' % (i.eval_ref_param('cg'), i))
             cg = i.eval_ref_param('cg')
             driver_cap += cg
 
         for i in loads:
+            _debug('> %s load %s' % (i.eval_ref_param('cg'), i))
             cg = i.eval_ref_param('cg')
             load_cap += cg
 
@@ -101,3 +106,7 @@ def _print_cell_hierarchy(cell, indent):
             _print_cell_hierarchy(inst.ref, indent + 1)
             print()
 
+#-------------------------------------------------------------------------------
+def _debug(msg):
+    if False:
+        print("DBG", msg)
