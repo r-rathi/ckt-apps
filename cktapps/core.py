@@ -400,6 +400,9 @@ class Instance(object):
 
         for inst in list(uniq_ref.all_instances()):
             uniq_inst = inst._uniq(name=presep + inst.name, ctx=ref_ctx)
+            # TODO: maybe inst._uniq should be doing the below stuff as well
+            # In other words, is there any point in just doing a copy and not
+            # updating the owner and pinmap.       
             #self.owner.add_instance_obj(uniq_inst)
             owner.add_instance_obj(uniq_inst)
             uniq_inst.pins = []
