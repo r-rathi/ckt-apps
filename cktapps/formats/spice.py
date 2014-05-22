@@ -207,9 +207,9 @@ class Reader(object):
             if skipcomments: return None
             type = ['comment', tokens[0]]
         elif tokens[0].startswith('.'):
-            type = ['control', tokens[0][1:]]
+            type = ['control', tokens[0][1:].lower()]
         else:
-            type = ['element', tokens[0][0]]
+            type = ['element', tokens[0][0].lower()]
 
         args = []
         kwargs = collections.OrderedDict()
